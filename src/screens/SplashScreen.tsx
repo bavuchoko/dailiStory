@@ -17,7 +17,7 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>Dailiary</Text>
+      <Text style={styles.logo}>dailyStory</Text>
     </View>
   );
 };
