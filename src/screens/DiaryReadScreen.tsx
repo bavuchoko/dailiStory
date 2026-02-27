@@ -7,6 +7,8 @@ import {
   PanResponder,
   GestureResponderEvent,
   PanResponderGestureState,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FeatherIcon from 'react-native-vector-icons/Feather';
@@ -43,6 +45,73 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
     [route.params?.date],
   );
   const [currentDate, setCurrentDate] = useState<Date>(initialDate);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const isAnimatingRef = useRef(false);
+
+  const runSlideTransition = (
+    direction: 'up' | 'down' | 'left' | 'right',
+    updateDate: () => void,
+  ) => {
+    if (isAnimatingRef.current) {
+      return;
+    }
+
+    const { width, height } = Dimensions.get('window');
+    let outX = 0;
+    let outY = 0;
+    let inX = 0;
+    let inY = 0;
+
+    switch (direction) {
+      case 'up':
+        outY = -height;
+        inY = height;
+        break;
+      case 'down':
+        outY = height;
+        inY = -height;
+        break;
+      case 'left':
+        outX = -width;
+        inX = width;
+        break;
+      case 'right':
+        outX = width;
+        inX = -width;
+        break;
+      default:
+        break;
+    }
+
+    const activeValue =
+      direction === 'left' || direction === 'right' ? translateX : translateY;
+
+    isAnimatingRef.current = true;
+
+    Animated.timing(activeValue, {
+      toValue: direction === 'left' || direction === 'right' ? outX : outY,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      updateDate();
+
+      translateX.setValue(
+        direction === 'left' || direction === 'right' ? inX : 0,
+      );
+      translateY.setValue(
+        direction === 'up' || direction === 'down' ? inY : 0,
+      );
+
+      Animated.timing(activeValue, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(() => {
+        isAnimatingRef.current = false;
+      });
+    });
+  };
 
   const handleSwipeRelease = (
     _evt: GestureResponderEvent,
@@ -58,15 +127,23 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
 
     if (absDy > absDx) {
       if (dy < 0) {
-        setCurrentDate(prev => addDays(prev, 1));
+        runSlideTransition('up', () =>
+          setCurrentDate(prev => addDays(prev, 1)),
+        );
       } else {
-        setCurrentDate(prev => addDays(prev, -1));
+        runSlideTransition('down', () =>
+          setCurrentDate(prev => addDays(prev, -1)),
+        );
       }
     } else {
       if (dx < 0) {
-        setCurrentDate(prev => addYears(prev, 1));
+        runSlideTransition('left', () =>
+          setCurrentDate(prev => addYears(prev, 1)),
+        );
       } else {
-        setCurrentDate(prev => addYears(prev, -1));
+        runSlideTransition('right', () =>
+          setCurrentDate(prev => addYears(prev, -1)),
+        );
       }
     }
   };
@@ -107,13 +184,24 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
           <Text style={styles.dateHeaderText}>{formatDate(currentDate)}</Text>
         </View>
 
-        <View style={styles.content}>
-          <Text style={styles.diaryPlaceholder}>
-            해당 날짜의 일기가 없습니다.
-          </Text>
-          <Text style={styles.helperText}>
-            위/아래로 스와이프하면 하루씩, 좌/우로 스와이프하면 1년씩 이동합니다.
-          </Text>
+        <View style={styles.bodyWrapper}>
+          <Animated.View
+            style={{
+              flex: 1,
+              transform: [
+                { translateX: translateX },
+                { translateY: translateY },
+              ],
+            }}>
+            <View style={styles.content}>
+              <Text style={styles.diaryPlaceholder}>
+                해당 날짜의 일기가 없습니다.
+              </Text>
+              <Text style={styles.helperText}>
+                위/아래로 스와이프하면 하루씩, 좌/우로 스와이프하면 1년씩 이동합니다.
+              </Text>
+            </View>
+          </Animated.View>
         </View>
       </View>
     </SafeAreaView>
@@ -180,6 +268,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 5,
+  },
+  bodyWrapper: {
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: '#F9FAFB',
   },
   diaryPlaceholder: {
     fontSize: 16,
