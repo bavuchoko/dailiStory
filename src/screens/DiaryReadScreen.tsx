@@ -259,8 +259,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: 0,
     marginHorizontal: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     backgroundColor: '#FFFFFF',
     padding: 24,
     shadowColor: '#000',
