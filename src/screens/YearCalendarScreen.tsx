@@ -114,6 +114,7 @@ export const YearCalendarScreen: React.FC<Props> = ({ route, navigation }) => {
       year,
       month,
       date: baseDate.toISOString(),
+      returnTo: route.params.returnTo,
     });
   };
 

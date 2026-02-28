@@ -67,7 +67,7 @@ export const MonthCalendarScreen: React.FC<Props> = ({
   route,
   navigation,
 }) => {
-  const { year, month, date } = route.params;
+  const { year, month, date, returnTo } = route.params;
   const selectedDate = date ? new Date(date) : undefined;
 
   const grid = useMemo(
@@ -81,9 +81,12 @@ export const MonthCalendarScreen: React.FC<Props> = ({
     }
 
     const selected = new Date(year, month - 1, day);
-    navigation.navigate('DiaryRead', {
-      date: selected.toISOString(),
-    });
+    if (returnTo === 'Collection') {
+      navigation.navigate('Collection', { date: selected.toISOString() });
+      return;
+    }
+
+    navigation.navigate('DiaryRead', { date: selected.toISOString() });
   };
 
   const labels = ['일', '월', '화', '수', '목', '금', '토'];

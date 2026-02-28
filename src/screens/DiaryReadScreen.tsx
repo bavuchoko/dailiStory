@@ -17,12 +17,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import FeatherIcon from 'react-native-vector-icons/Feather';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { HomeStackParamList } from '../navigation/types';
 import { CalendarWeekIcon } from '../components/icons/CalendarWeekIcon';
+import { ChevronLeftIcon } from '../components/icons/ChevronLeftIcon';
 import { PencilCheckIcon } from '../components/icons/PencilCheckIcon';
 import { BackspaceIcon } from '../components/icons/BackspaceIcon';
 import { CircleXIcon } from '../components/icons/CircleXIcon';
@@ -231,6 +231,14 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
     });
   };
 
+  const handlePressBack = () => {
+    if ((navigation as any).canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('Main');
+  };
+
   const handlePressWrite = () => {
     const root = (navigation as any).getParent()?.getParent();
     root?.navigate('DiaryWrite', { date: dateStr });
@@ -256,6 +264,12 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
       <View style={styles.container}>
         <View style={styles.topBar}>
           <View style={styles.topBarLeftGroup}>
+            <TouchableOpacity
+              onPress={handlePressBack}
+              style={styles.topBarBack}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <ChevronLeftIcon size={24} color="#6B7280" />
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={handleOpenCalendar}
               style={styles.topBarLeft}>
@@ -504,6 +518,11 @@ const styles = StyleSheet.create({
   topBarLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  topBarBack: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    marginRight: 4,
   },
   topBarLeft: {
     paddingHorizontal: 4,

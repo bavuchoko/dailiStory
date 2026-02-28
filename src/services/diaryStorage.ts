@@ -36,6 +36,24 @@ export async function getEntriesByDate(date: Date): Promise<DiaryEntry[]> {
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
+/** 같은 월·일(MM-DD)인 모든 연도 일기, 연도 내림차순(최신 먼저) */
+export async function getEntriesByMonthDay(
+  month: number,
+  day: number,
+): Promise<DiaryEntry[]> {
+  const mm = `${month}`.padStart(2, '0');
+  const dd = `${day}`.padStart(2, '0');
+  const suffix = `-${mm}-${dd}`;
+  const all = await getAllEntries();
+  return all
+    .filter(e => e.date.endsWith(suffix))
+    .sort((a, b) => {
+      const yearA = parseInt(a.date.slice(0, 4), 10);
+      const yearB = parseInt(b.date.slice(0, 4), 10);
+      return yearB - yearA || a.createdAt - b.createdAt;
+    });
+}
+
 export async function addEntry(entry: {
   date: string;
   text: string;

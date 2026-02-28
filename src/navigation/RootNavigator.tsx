@@ -15,6 +15,7 @@ import { StatsIcon } from '../components/icons/StatsIcon';
 import { HelpCircleIcon } from '../components/icons/HelpCircleIcon';
 
 import { MainScreen } from '../screens/MainScreen';
+import { CollectionScreen } from '../screens/CollectionScreen';
 import { DiaryReadScreen } from '../screens/DiaryReadScreen';
 import { DiaryWriteScreen } from '../screens/DiaryWriteScreen';
 import { YearCalendarScreen } from '../screens/YearCalendarScreen';
@@ -50,6 +51,11 @@ const HomeStackNavigator = () => {
         options={{ headerShown: false }}
       />
       <HomeStack.Screen
+        name="Collection"
+        component={CollectionScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
         name="DiaryRead"
         component={DiaryReadScreen}
         options={{
@@ -75,9 +81,7 @@ const MainScreenWrapper = ({ navigation }: { navigation: any }) => {
   return (
     <MainScreen
       onPressDiary={() => navigation.navigate('DiaryRead')}
-      onPressCollection={() => {
-        // 추후 모아보기 화면으로 확장 가능
-      }}
+      onPressCollection={() => navigation.navigate('Collection')}
     />
   );
 };
