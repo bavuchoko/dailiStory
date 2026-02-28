@@ -1,4 +1,8 @@
 {
   "name": "dailyStory",
-  "displayName": "dailyStory"
+  "displayName": "dailyStory",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-8998366944335616~4298020698",
+    "ios_app_id": "ca-app-pub-8998366944335616~1954928389"
+  }
 }
