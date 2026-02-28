@@ -152,7 +152,6 @@ export const ToolsScreen: React.FC = () => {
       <Text style={styles.hint}>
         「광고 제거 구매」는 스토어 인앱 결제로 진행됩니다.{'\n'}
         「구매 복원」은 재설치·기기 변경 후 구매 내역을 불러옵니다.{'\n'}
-        상품 ID: remove_ads (앱스토어·플레이 콘솔에 동일 ID로 등록 필요)
       </Text>
     </TabScreenLayout>
   );
