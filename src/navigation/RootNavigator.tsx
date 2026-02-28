@@ -177,7 +177,7 @@ const TabsNavigator = ({ navigation }: { navigation: any }) => {
       />
         <Tab.Screen
             name="SearchTab"
-            children={() => <PlaceholderScreen label="검색" />}
+            component={SearchScreen}
             options={{
                 title: '검색',
                 tabBarLabel: () => null,

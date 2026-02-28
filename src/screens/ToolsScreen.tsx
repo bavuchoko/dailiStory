@@ -14,10 +14,16 @@ import {
   purchaseAdRemoval,
   restorePurchases,
 } from '../services/purchaseService';
+import {
+  seedYearFromTemplate,
+  clearAllEntries,
+} from '../services/diaryStorage';
 
 export const ToolsScreen: React.FC = () => {
   const [isPaid, setIsPaid] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [seedLoading, setSeedLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -51,6 +57,43 @@ export const ToolsScreen: React.FC = () => {
     }
   };
 
+  const handleSeedYear = async () => {
+    setSeedLoading(true);
+    try {
+      const added = await seedYearFromTemplate('2026-02-28');
+      Alert.alert('완료', `2026년 1/1~12/31에 ${added}건 복제되었습니다.`);
+    } catch (e) {
+      Alert.alert('오류', (e as Error).message);
+    } finally {
+      setSeedLoading(false);
+    }
+  };
+
+  const handleResetData = () => {
+    Alert.alert(
+      '데이터 초기화',
+      '모든 일기가 삭제됩니다. 복원할 수 없습니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '초기화',
+          style: 'destructive',
+          onPress: async () => {
+            setResetLoading(true);
+            try {
+              await clearAllEntries();
+              Alert.alert('완료', '모든 일기가 삭제되었습니다.');
+            } catch (e) {
+              Alert.alert('오류', (e as Error).message);
+            } finally {
+              setResetLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <TabScreenLayout>
       <View style={styles.section}>
@@ -78,6 +121,34 @@ export const ToolsScreen: React.FC = () => {
           </>
         )}
       </View>
+      {/*{__DEV__ && (*/}
+      {/*  <View style={styles.section}>*/}
+      {/*    <Text style={styles.sectionTitle}>개발용</Text>*/}
+      {/*    <Text style={styles.sectionHint}>*/}
+      {/*      빌드 시 제외됩니다.*/}
+      {/*    </Text>*/}
+      {/*    <TouchableOpacity*/}
+      {/*      style={[styles.buttonSecondary, styles.devButton]}*/}
+      {/*      onPress={handleSeedYear}*/}
+      {/*      disabled={seedLoading}>*/}
+      {/*      {seedLoading ? (*/}
+      {/*        <ActivityIndicator color="#6B7280" size="small" />*/}
+      {/*      ) : (*/}
+      {/*        <Text style={styles.buttonSecondaryText}>2026년 데이터 복제</Text>*/}
+      {/*      )}*/}
+      {/*    </TouchableOpacity>*/}
+      {/*    <TouchableOpacity*/}
+      {/*      style={styles.buttonSecondary}*/}
+      {/*      onPress={handleResetData}*/}
+      {/*      disabled={resetLoading}>*/}
+      {/*      {resetLoading ? (*/}
+      {/*        <ActivityIndicator color="#DC2626" size="small" />*/}
+      {/*      ) : (*/}
+      {/*        <Text style={styles.resetButtonText}>데이터 초기화</Text>*/}
+      {/*      )}*/}
+      {/*    </TouchableOpacity>*/}
+      {/*  </View>*/}
+      {/*)}*/}
       <Text style={styles.hint}>
         「광고 제거 구매」는 스토어 인앱 결제로 진행됩니다.{'\n'}
         「구매 복원」은 재설치·기기 변경 후 구매 내역을 불러옵니다.{'\n'}
@@ -101,6 +172,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#6B7280',
   },
+  sectionHint: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
   button: {
     backgroundColor: '#111827',
     paddingVertical: 14,
@@ -121,6 +197,13 @@ const styles = StyleSheet.create({
   buttonSecondaryText: {
     fontSize: 15,
     color: '#6B7280',
+  },
+  devButton: {
+    marginBottom: 4,
+  },
+  resetButtonText: {
+    fontSize: 15,
+    color: '#DC2626',
   },
   hint: {
     fontSize: 13,

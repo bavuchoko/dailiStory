@@ -21,6 +21,11 @@ export async function saveAllEntries(entries: DiaryEntry[]): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
+/** 모든 일기 삭제 (테스트용) */
+export async function clearAllEntries(): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+}
+
 export function getDateString(date: Date): string {
   const y = date.getFullYear();
   const m = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -198,4 +203,46 @@ export async function getYearStats(year: number): Promise<YearStats> {
     monthCounts,
     topTags,
   };
+}
+
+/**
+ * 특정 날짜의 일기를 해당 연도 1/1~12/31 전체로 복제 (테스트용)
+ * @param templateDate 예: '2026-02-28'
+ * @returns 추가된 일기 개수
+ */
+export async function seedYearFromTemplate(templateDate: string): Promise<number> {
+  const all = await getAllEntries();
+  const template = all.filter(e => e.date === templateDate);
+  if (template.length === 0) return 0;
+  const [y] = templateDate.split('-').map(Number);
+  const existingDates = new Set(all.map(e => e.date));
+  let added = 0;
+  for (let m = 1; m <= 12; m++) {
+    const daysInMonth = new Date(y, m, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const mm = `${m}`.padStart(2, '0');
+      const dd = `${d}`.padStart(2, '0');
+      const dateStr = `${y}-${mm}-${dd}`;
+      if (dateStr === templateDate) continue;
+      if (existingDates.has(dateStr)) continue;
+      const baseTime = new Date(y, m - 1, d).getTime();
+      for (let i = 0; i < template.length; i++) {
+        const t = template[i];
+        const offset = (t.createdAt - new Date(templateDate).getTime()) || 0;
+        const newEntry: DiaryEntry = {
+          id: `entry_${baseTime + i}_${Math.random().toString(36).slice(2, 9)}`,
+          date: dateStr,
+          text: t.text,
+          imageUris: t.imageUris,
+          tags: t.tags,
+          createdAt: baseTime + offset,
+        };
+        all.push(newEntry);
+        added++;
+      }
+      existingDates.add(dateStr);
+    }
+  }
+  await saveAllEntries(all);
+  return added;
 }
