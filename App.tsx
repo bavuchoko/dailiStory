@@ -8,11 +8,16 @@
 import React from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import mobileAds from 'react-native-google-mobile-ads';
 
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+
+  React.useEffect(() => {
+    mobileAds().initialize();
+  }, []);
 
   return (
     <SafeAreaProvider>

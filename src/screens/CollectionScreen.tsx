@@ -161,7 +161,7 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
                   <>
                     <Text
                       style={styles.mergedBody}
-                      numberOfLines={3}
+                      numberOfLines={5}
                       ellipsizeMode="tail">
                       {mergedText || ' '}
                     </Text>

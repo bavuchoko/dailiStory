@@ -15,8 +15,9 @@ import {
   Modal,
   FlatList,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -31,6 +32,12 @@ import {
   getDateString,
   deleteEntry,
 } from '../services/diaryStorage';
+import { getIsPaid } from '../services/paidStorage';
+import {
+  ADMOB_BANNER_UNIT_ID_ANDROID,
+  ADMOB_BANNER_UNIT_ID_IOS,
+} from '../services/admobConfig';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import type { DiaryEntry } from '../types/diary';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'DiaryRead'>;
@@ -81,7 +88,17 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
       { containerWidth?: number; lastLineWidth?: number; metaWidth?: number }
     >
   >({});
+  const [isPaid, setIsPaid] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const bannerUnitId =
+    Platform.OS === 'ios' ? ADMOB_BANNER_UNIT_ID_IOS : ADMOB_BANNER_UNIT_ID_ANDROID;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      getIsPaid().then(setIsPaid);
+    }, []),
+  );
 
   const getMetaOnNextLine = (entryId: string) => {
     const layout = entryMetaLayout[entryId];
@@ -490,6 +507,22 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
             </View>
           </Animated.View>
         </View>
+
+        {!isPaid && (
+          <View
+            style={[
+              styles.adArea,
+              {
+                paddingLeft: insets.left,
+                paddingRight: insets.right,
+              },
+            ]}>
+            <BannerAd
+              unitId={bannerUnitId}
+              size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+            />
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -713,6 +746,16 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
     backgroundColor: '#F9FAFB',
+  },
+  adArea: {
+    minHeight: 60,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   diaryPlaceholder: {
     fontSize: 16,

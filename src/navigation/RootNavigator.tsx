@@ -82,6 +82,7 @@ const MainScreenWrapper = ({ navigation }: { navigation: any }) => {
     <MainScreen
       onPressDiary={() => navigation.navigate('DiaryRead')}
       onPressCollection={() => navigation.navigate('Collection')}
+      onPressDate={(date) => navigation.navigate('DiaryRead', { date: date.toISOString() })}
     />
   );
 };

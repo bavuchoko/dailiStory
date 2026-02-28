@@ -62,5 +62,7 @@
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>일기에 사진을 추가하기 위해 사진 라이브러리 접근이 필요합니다.</string>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-8998366944335616~1954928389</string>
 </dict>
 </plist>
