@@ -1,8 +1,22 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { HomeStackParamList } from '../navigation/types';
+import { getIsPaid } from '../services/paidStorage';
+import {
+  ADMOB_BANNER_UNIT_ID_ANDROID,
+  ADMOB_BANNER_UNIT_ID_IOS,
+} from '../services/admobConfig';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'MonthCalendar'>;
 
@@ -69,6 +83,16 @@ export const MonthCalendarScreen: React.FC<Props> = ({
 }) => {
   const { year, month, date, returnTo } = route.params;
   const selectedDate = date ? new Date(date) : undefined;
+  const [isPaid, setIsPaid] = useState(false);
+  const insets = useSafeAreaInsets();
+  const bannerUnitId =
+    Platform.OS === 'ios' ? ADMOB_BANNER_UNIT_ID_IOS : ADMOB_BANNER_UNIT_ID_ANDROID;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      getIsPaid().then(setIsPaid);
+    }, []),
+  );
 
   const grid = useMemo(
     () => buildMonthGrid(year, month, selectedDate),
@@ -93,6 +117,7 @@ export const MonthCalendarScreen: React.FC<Props> = ({
 
   return (
     <View style={styles.container}>
+      <View style={styles.content}>
       <Text style={styles.title}>
         {year}년 {month}월
       </Text>
@@ -137,6 +162,23 @@ export const MonthCalendarScreen: React.FC<Props> = ({
           );
         })}
       </View>
+      </View>
+
+      {!isPaid && (
+        <View
+          style={[
+            styles.adArea,
+            {
+              paddingLeft: insets.left,
+              paddingRight: insets.right,
+            },
+          ]}>
+          <BannerAd
+            unitId={bannerUnitId}
+            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          />
+        </View>
+      )}
     </View>
   );
 };
@@ -144,9 +186,12 @@ export const MonthCalendarScreen: React.FC<Props> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  content: {
+    flex: 1,
     paddingTop: 24,
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: 22,
@@ -209,6 +254,12 @@ const styles = StyleSheet.create({
   dayTextSelected: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  adArea: {
+    minHeight: 60,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

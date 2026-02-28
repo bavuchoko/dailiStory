@@ -11,12 +11,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import mobileAds from 'react-native-google-mobile-ads';
 
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { initIapIfAvailable } from './src/services/purchaseService';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   React.useEffect(() => {
     mobileAds().initialize();
+  }, []);
+
+  React.useEffect(() => {
+    initIapIfAvailable();
   }, []);
 
   return (
