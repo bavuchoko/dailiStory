@@ -24,3 +24,11 @@ export type RootStackParamList = {
   DiaryWrite: { date?: string; entryId?: string } | undefined;
 };
 
+export type TabParamList = {
+  ReminderTab: undefined;
+  SearchTab: undefined;
+  HomeTab: undefined;
+  StatsTab: undefined;
+  BackupTab: undefined;
+};
+

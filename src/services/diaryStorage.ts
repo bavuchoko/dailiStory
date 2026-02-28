@@ -104,3 +104,26 @@ export async function deleteEntry(id: string): Promise<boolean> {
   await saveAllEntries(next);
   return true;
 }
+
+/** 태그가 하나 이상 포함된 일기 목록, 최신순 */
+export async function getEntriesByTag(tag: string): Promise<DiaryEntry[]> {
+  if (!tag.trim()) return [];
+  const all = await getAllEntries();
+  const lower = tag.trim().toLowerCase();
+  return all
+    .filter(e => e.tags.some(t => t.trim().toLowerCase() === lower))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** 일기에서 사용된 모든 태그 (중복 제거, 정렬) */
+export async function getAllTags(): Promise<string[]> {
+  const all = await getAllEntries();
+  const set = new Set<string>();
+  for (const e of all) {
+    for (const t of e.tags) {
+      const trimmed = t.trim();
+      if (trimmed) set.add(trimmed);
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
