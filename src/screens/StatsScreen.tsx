@@ -107,13 +107,20 @@ export const StatsScreen: React.FC = () => {
             <View style={styles.monthRow}>
               <View style={styles.monthLeft}>
                 <Text style={styles.cardLabel2}>가장 일기가 많은 달</Text>
-                <Text style={styles.monthValue}>
-                  {stats.topMonth != null
-                    ? MONTH_NAMES[stats.topMonth]
-                    : '-'}
-                </Text>
+                <View style={styles.monthValueRow}>
+                  <Text style={styles.monthValue}>
+                    {stats.topMonths.length > 0
+                      ? stats.topMonths.map(m => MONTH_NAMES[m]).join(', ')
+                      : '-'}
+                  </Text>
+                  {stats.topMonths.length > 0 ? (
+                    <Text style={styles.monthCount}>
+                      ({stats.monthCounts[stats.topMonths[0] - 1] ?? 0}건)
+                    </Text>
+                  ) : null}
+                </View>
                 <Text style={styles.monthHint}>
-                  {stats.topMonth != null
+                  {stats.topMonths.length > 0
                     ? '한 해 동안 일기를 가장 많은 쓴 달'
                     : '일기가 없습니다'}
                 </Text>
@@ -228,10 +235,19 @@ const styles = StyleSheet.create({
     height: PIE_SIZE,
     flexShrink: 0,
   },
+  monthValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
   monthValue: {
     fontSize: 24,
     fontWeight: '800',
     color: '#111827',
+  },
+  monthCount: {
+    fontSize: 14,
+    color: '#9CA3AF',
   },
   monthHint: {
     fontSize: 12,

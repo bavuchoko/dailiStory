@@ -131,8 +131,8 @@ export async function getAllTags(): Promise<string[]> {
 export type YearStats = {
   /** 해당 연도에 일기를 쓴 날 수(유일한 날짜 개수) */
   daysWithEntries: number;
-  /** 일기가 가장 많은 달 (1~12), 동점이면 먼저 오는 달 */
-  topMonth: number | null;
+  /** 일기가 가장 많은 달 (1~12), 동점이면 최대 2개까지 [1월, 2월] 형식 */
+  topMonths: number[];
   /** 월별 일기 건수 [1월, 2월, ..., 12월] */
   monthCounts: number[];
   /** 연도 내 가장 많이 달린 태그 순위 3위까지 (동점이면 같은 순위) */
@@ -146,26 +146,33 @@ export async function getYearStats(year: number): Promise<YearStats> {
   const inYear = all.filter(e => e.date.startsWith(prefix));
 
   const dateSet = new Set<string>();
-  const monthCount: Record<number, number> = {};
+  const monthDates: Record<number, Set<string>> = {};
   const tagCount: Record<string, number> = {};
 
   for (const e of inYear) {
     dateSet.add(e.date);
     const month = parseInt(e.date.slice(5, 7), 10);
-    monthCount[month] = (monthCount[month] ?? 0) + 1;
+    if (!monthDates[month]) monthDates[month] = new Set();
+    monthDates[month].add(e.date);
     for (const t of e.tags) {
       const key = t.trim();
       if (key) tagCount[key] = (tagCount[key] ?? 0) + 1;
     }
   }
 
-  let topMonth: number | null = null;
+  const monthCount: Record<number, number> = {};
+  for (let m = 1; m <= 12; m++) {
+    monthCount[m] = monthDates[m]?.size ?? 0;
+  }
   let maxCount = 0;
   for (let m = 1; m <= 12; m++) {
     const c = monthCount[m] ?? 0;
-    if (c > maxCount) {
-      maxCount = c;
-      topMonth = m;
+    if (c > maxCount) maxCount = c;
+  }
+  const topMonths: number[] = [];
+  for (let m = 1; m <= 12 && topMonths.length < 2; m++) {
+    if ((monthCount[m] ?? 0) === maxCount && maxCount > 0) {
+      topMonths.push(m);
     }
   }
 
@@ -187,7 +194,7 @@ export async function getYearStats(year: number): Promise<YearStats> {
 
   return {
     daysWithEntries: dateSet.size,
-    topMonth,
+    topMonths,
     monthCounts,
     topTags,
   };
