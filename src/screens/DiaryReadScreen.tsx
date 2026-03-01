@@ -40,6 +40,7 @@ import {
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import type { DiaryEntry } from '../types/diary';
 import { DEFAULT_FONT_SIZE } from '../types/diary';
+import { HighlightedText } from '../components/HighlightedText';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'DiaryRead'>;
 
@@ -425,7 +426,10 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                             },
                           }));
                         }}>
-                        <Text
+                        <HighlightedText
+                          text={entry.text}
+                          highlights={entry.highlights}
+                          strikethroughs={entry.strikethroughs}
                           style={[
                             styles.entryText,
                             {
@@ -446,9 +450,8 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                                 },
                               }));
                             }
-                          }}>
-                          {entry.text}
-                        </Text>
+                          }}
+                        />
                         <View
                           style={
                             getMetaOnNextLine(entry.id)

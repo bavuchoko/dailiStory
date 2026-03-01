@@ -28,7 +28,80 @@ import {
   getDateString,
   getEntryById,
 } from '../services/diaryStorage';
-import { DEFAULT_FONT_SIZE, FONT_SIZE_OPTIONS } from '../types/diary';
+import {
+  DEFAULT_FONT_SIZE,
+  FONT_SIZE_OPTIONS,
+  HIGHLIGHT_COLOR_OPTIONS,
+  type HighlightRange,
+  type StrikethroughRange,
+} from '../types/diary';
+import { MarkerTipIcon } from '../components/icons/MarkerTipIcon';
+import { XCircleIcon } from '../components/icons/XCircleIcon';
+import { TypeStrikethroughIcon } from '../components/icons/TypeStrikethroughIcon';
+import { HighlightedText } from '../components/HighlightedText';
+
+/** 텍스트 수정 시 하이라이트 구간 오프셋 보정 */
+function adjustHighlightsForTextChange(
+  oldText: string,
+  newText: string,
+  highlights: HighlightRange[],
+): HighlightRange[] {
+  const oldLen = oldText.length;
+  const newLen = newText.length;
+  let firstDiff = 0;
+  while (firstDiff < oldLen && firstDiff < newLen && oldText[firstDiff] === newText[firstDiff]) {
+    firstDiff++;
+  }
+  const delta = newLen - oldLen;
+  const out: HighlightRange[] = [];
+  for (const h of highlights) {
+    let start = h.start;
+    let end = h.end;
+    if (end <= firstDiff) {
+      // 변경 위치 이전 구간
+    } else if (start >= firstDiff) {
+      start = Math.max(0, start + delta);
+      end = Math.min(newLen, end + delta);
+    } else {
+      end = Math.min(newLen, end + delta);
+    }
+    if (start < end && end <= newLen) {
+      out.push({ start, end, color: h.color });
+    }
+  }
+  return out;
+}
+
+/** 텍스트 수정 시 취소선 구간 오프셋 보정 */
+function adjustStrikethroughsForTextChange(
+  oldText: string,
+  newText: string,
+  strikethroughs: StrikethroughRange[],
+): StrikethroughRange[] {
+  const oldLen = oldText.length;
+  const newLen = newText.length;
+  let firstDiff = 0;
+  while (firstDiff < oldLen && firstDiff < newLen && oldText[firstDiff] === newText[firstDiff]) {
+    firstDiff++;
+  }
+  const delta = newLen - oldLen;
+  const out: StrikethroughRange[] = [];
+  for (const s of strikethroughs) {
+    let start = s.start;
+    let end = s.end;
+    if (end <= firstDiff) {
+    } else if (start >= firstDiff) {
+      start = Math.max(0, start + delta);
+      end = Math.min(newLen, end + delta);
+    } else {
+      end = Math.min(newLen, end + delta);
+    }
+    if (start < end && end <= newLen) {
+      out.push({ start, end });
+    }
+  }
+  return out;
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DiaryWrite'>;
 
@@ -42,6 +115,12 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
   const [tagModalVisible, setTagModalVisible] = useState(false);
   const [fontSizeModalVisible, setFontSizeModalVisible] = useState(false);
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+  const [highlights, setHighlights] = useState<HighlightRange[]>([]);
+  const [highlightColorMenuVisible, setHighlightColorMenuVisible] = useState(false);
+  const [strikethroughs, setStrikethroughs] = useState<StrikethroughRange[]>([]);
+  const [selectionStart, setSelectionStart] = useState(0);
+  const [selectionEnd, setSelectionEnd] = useState(0);
+  const [inputContentHeight, setInputContentHeight] = useState(0);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(!entryId);
@@ -60,6 +139,8 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
         setImages(entry.imageUris.map(uri => ({ uri })));
         setTags(entry.tags ?? []);
         setFontSize(entry.fontSize ?? DEFAULT_FONT_SIZE);
+        setHighlights(entry.highlights ?? []);
+        setStrikethroughs(entry.strikethroughs ?? []);
       }
       setLoaded(true);
     });
@@ -123,6 +204,8 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
                     imageUris: images.map(i => i.uri),
                     tags,
                     fontSize,
+                    highlights,
+                    strikethroughs,
                   });
                 } else {
                   await addEntry({
@@ -131,6 +214,8 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
                     imageUris: images.map(i => i.uri),
                     tags,
                     fontSize,
+                    highlights,
+                    strikethroughs,
                   });
                 }
                 navigation.goBack();
@@ -171,21 +256,76 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
               ))}
             </ScrollView>
           )}
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder="내용을 입력하세요..."
-            placeholderTextColor="#9CA3AF"
-            style={[
-              styles.input,
-              {
-                fontSize,
-                lineHeight: fontSize * 1.5,
-              },
+          <ScrollView
+            style={styles.inputScroll}
+            contentContainerStyle={[
+              styles.inputScrollContent,
+              inputContentHeight > 0 && { minHeight: inputContentHeight },
             ]}
-            multiline
-            textAlignVertical="top"
-          />
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            <View
+              style={[
+                styles.inputContainer,
+                { minHeight: inputContentHeight || 120 },
+              ]}>
+              <View
+                style={[
+                  styles.inputBackLayer,
+                  { minHeight: inputContentHeight || 120 },
+                ]}
+                pointerEvents="none">
+                {text.length > 0 && (
+                  <HighlightedText
+                    text={text}
+                    highlights={highlights}
+                    strikethroughs={strikethroughs}
+                    style={[
+                      styles.inputBackText,
+                      {
+                        fontSize,
+                        lineHeight: fontSize * 1.5,
+                      },
+                    ]}
+                  />
+                )}
+              </View>
+              <TextInput
+                value={text}
+                onChangeText={newText => {
+                  setHighlights(prev =>
+                    adjustHighlightsForTextChange(text, newText, prev),
+                  );
+                  setStrikethroughs(prev =>
+                    adjustStrikethroughsForTextChange(text, newText, prev),
+                  );
+                  setText(newText);
+                }}
+                onContentSizeChange={e => {
+                  const h = e.nativeEvent.contentSize.height;
+                  setInputContentHeight(Math.max(h, 120));
+                }}
+                onSelectionChange={e => {
+                  setSelectionStart(e.nativeEvent.selection.start);
+                  setSelectionEnd(e.nativeEvent.selection.end);
+                }}
+                placeholder="내용을 입력하세요..."
+                placeholderTextColor="#9CA3AF"
+                style={[
+                  styles.input,
+                  styles.inputOverlay,
+                  {
+                    fontSize,
+                    lineHeight: fontSize * 1.5,
+                    height: inputContentHeight || 120,
+                  },
+                ]}
+                multiline
+                textAlignVertical="top"
+                scrollEnabled={false}
+              />
+            </View>
+          </ScrollView>
           {tags.length > 0 && (
             <ScrollView
               horizontal
@@ -249,14 +389,95 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
               <TextSizeIcon size={22} color="#4f5052" />
             </TouchableOpacity>
           </View>
+          <View style={styles.fontSizeButtonWrap}>
+            {highlightColorMenuVisible && (
+              <View
+                style={styles.highlightColorMenu}
+                onStartShouldSetResponder={() => true}>
+                {HIGHLIGHT_COLOR_OPTIONS.map((opt, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={[
+                      styles.highlightColorSwatch,
+                      { backgroundColor: opt.color },
+                    ]}
+                    onPress={() => {
+                      if (
+                        selectionStart !== selectionEnd &&
+                        selectionEnd <= text.length
+                      ) {
+                        const start = Math.min(selectionStart, selectionEnd);
+                        const end = Math.max(selectionStart, selectionEnd);
+                        setHighlights(prev =>
+                          [...prev, { start, end, color: opt.color }].sort(
+                            (a, b) => a.start - b.start,
+                          ),
+                        );
+                      }
+                      setHighlightColorMenuVisible(false);
+                    }}
+                  />
+                ))}
+                <View style={styles.highlightColorDivider} />
+                <TouchableOpacity
+                  style={styles.highlightColorClear}
+                  onPress={() => {
+                    if (
+                      selectionStart !== selectionEnd &&
+                      selectionEnd <= text.length
+                    ) {
+                      const start = Math.min(selectionStart, selectionEnd);
+                      const end = Math.max(selectionStart, selectionEnd);
+                      setHighlights(prev =>
+                        prev.filter(
+                          h => !(h.start < end && h.end > start),
+                        ),
+                      );
+                    }
+                    setHighlightColorMenuVisible(false);
+                  }}>
+                  <XCircleIcon size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.toolButton}
+              onPress={() =>
+                setHighlightColorMenuVisible(prev => !prev)
+              }>
+              <MarkerTipIcon size={22} color="#4f5052" />
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity style={styles.toolButton} onPress={handlePickImage}>
             <PhotoIcon size={22} color="#4f5052" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.toolButton}>
-            <FeatherIcon name="video" size={22} color="#4f5052" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolButton}>
-            <FeatherIcon name="mic" size={22} color="#111827" />
+          <TouchableOpacity
+            style={styles.toolButton}
+            onPress={() => {
+              if (
+                selectionStart === selectionEnd ||
+                selectionEnd > text.length
+              ) return;
+              const start = Math.min(selectionStart, selectionEnd);
+              const end = Math.max(selectionStart, selectionEnd);
+              const overlapping = strikethroughs.filter(
+                s => s.start < end && s.end > start,
+              );
+              const fullyCovered =
+                overlapping.length > 0 &&
+                Math.min(...overlapping.map(s => s.start)) <= start &&
+                Math.max(...overlapping.map(s => s.end)) >= end;
+              if (fullyCovered) {
+                setStrikethroughs(prev =>
+                  prev.filter(s => !(s.start < end && s.end > start)),
+                );
+              } else {
+                setStrikethroughs(prev =>
+                  [...prev, { start, end }].sort((a, b) => a.start - b.start),
+                );
+              }
+            }}>
+            <TypeStrikethroughIcon size={22} color="#4f5052" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -420,9 +641,40 @@ const styles = StyleSheet.create({
   tagChipRemove: {
     padding: 2,
   },
-  input: {
+  inputScroll: {
     flex: 1,
+  },
+  inputScrollContent: {
+    flexGrow: 1,
+    minHeight: 120,
+  },
+  inputContainer: {
+    minHeight: 120,
+    position: 'relative',
+  },
+  inputBackLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 0,
+  },
+  inputBackText: {
     color: '#111827',
+  },
+  input: {
+    minHeight: 120,
+    padding: 0,
+    color: '#111827',
+  },
+  inputOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    color: 'transparent',
+    minHeight: 120,
   },
   bottomBar: {
     height: 56,
@@ -555,6 +807,49 @@ const styles = StyleSheet.create({
   fontSizeOptionTextActive: {
     fontWeight: '600',
     color: '#111827',
+  },
+  highlightColorMenu: {
+    position: 'absolute',
+    bottom: '100%',
+    left: '50%',
+    marginBottom: 8,
+    marginLeft: -120,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E7EB',
+  },
+  highlightColorSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  highlightColorDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 24,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 6,
+  },
+  highlightColorClear: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
   },
 });
 

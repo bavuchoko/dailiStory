@@ -8,11 +8,18 @@ export async function getAllEntries(): Promise<DiaryEntry[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const list = JSON.parse(raw) as (Omit<DiaryEntry, 'tags'> & { tags?: string[]; fontSize?: number })[];
+    const list = JSON.parse(raw) as (Omit<DiaryEntry, 'tags'> & {
+      tags?: string[];
+      fontSize?: number;
+      highlights?: import('../types/diary').HighlightRange[];
+      strikethroughs?: import('../types/diary').StrikethroughRange[];
+    })[];
     return (Array.isArray(list) ? list : []).map(e => ({
       ...e,
       tags: e.tags ?? [],
       fontSize: e.fontSize ?? DEFAULT_FONT_SIZE,
+      highlights: e.highlights ?? [],
+      strikethroughs: e.strikethroughs ?? [],
     })) as DiaryEntry[];
   } catch {
     return [];
@@ -67,6 +74,8 @@ export async function addEntry(entry: {
   imageUris: string[];
   tags?: string[];
   fontSize?: number;
+  highlights?: import('../types/diary').HighlightRange[];
+  strikethroughs?: import('../types/diary').StrikethroughRange[];
 }): Promise<DiaryEntry> {
   const all = await getAllEntries();
   const newEntry: DiaryEntry = {
@@ -77,6 +86,8 @@ export async function addEntry(entry: {
     tags: entry.tags ?? [],
     createdAt: Date.now(),
     fontSize: entry.fontSize ?? DEFAULT_FONT_SIZE,
+    highlights: entry.highlights ?? [],
+    strikethroughs: entry.strikethroughs ?? [],
   };
   all.push(newEntry);
   await saveAllEntries(all);
@@ -90,7 +101,14 @@ export async function getEntryById(id: string): Promise<DiaryEntry | null> {
 
 export async function updateEntry(
   id: string,
-  updates: { text?: string; imageUris?: string[]; tags?: string[]; fontSize?: number },
+  updates: {
+    text?: string;
+    imageUris?: string[];
+    tags?: string[];
+    fontSize?: number;
+    highlights?: import('../types/diary').HighlightRange[];
+    strikethroughs?: import('../types/diary').StrikethroughRange[];
+  },
 ): Promise<DiaryEntry | null> {
   const all = await getAllEntries();
   const idx = all.findIndex(e => e.id === id);
@@ -102,6 +120,8 @@ export async function updateEntry(
     imageUris: updates.imageUris ?? all[idx].imageUris,
     tags: updates.tags ?? all[idx].tags,
     fontSize: updates.fontSize ?? all[idx].fontSize ?? DEFAULT_FONT_SIZE,
+    highlights: updates.highlights ?? all[idx].highlights ?? [],
+    strikethroughs: updates.strikethroughs ?? all[idx].strikethroughs ?? [],
   };
   await saveAllEntries(all);
   return all[idx];
@@ -242,6 +262,8 @@ export async function seedYearFromTemplate(templateDate: string): Promise<number
           tags: t.tags,
           createdAt: baseTime + offset,
           fontSize: t.fontSize ?? DEFAULT_FONT_SIZE,
+          highlights: t.highlights ?? [],
+          strikethroughs: t.strikethroughs ?? [],
         };
         all.push(newEntry);
         added++;

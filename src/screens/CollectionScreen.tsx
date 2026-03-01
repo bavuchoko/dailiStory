@@ -14,8 +14,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '../navigation/types';
 import { TabScreenLayout } from '../components/TabScreenLayout';
 import { CalendarWeekIcon } from '../components/icons/CalendarWeekIcon';
+import { HighlightedText } from '../components/HighlightedText';
 import { getEntriesByMonthDay } from '../services/diaryStorage';
-import type { DiaryEntry } from '../types/diary';
+import type { DiaryEntry, HighlightRange, StrikethroughRange } from '../types/diary';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Collection'>;
 
@@ -137,11 +138,34 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
         {yearDates.map(dateStr => {
           const dateEntries = grouped.get(dateStr) ?? [];
           const allPhotos = dateEntries.flatMap(e => e.imageUris);
-          const mergedText = [...dateEntries]
-            .sort((a, b) => a.createdAt - b.createdAt)
+          const sortedEntries = [...dateEntries].sort(
+            (a, b) => a.createdAt - b.createdAt,
+          );
+          const textParts = sortedEntries
             .map(e => (e.text ?? '').trim())
-            .filter(t => t.length > 0)
-            .join('\n');
+            .filter(t => t.length > 0);
+          const mergedText = textParts.join('\n');
+          let offset = 0;
+          const mergedHighlights: HighlightRange[] = [];
+          const mergedStrikethroughs: StrikethroughRange[] = [];
+          for (const entry of sortedEntries) {
+            const t = (entry.text ?? '').trim();
+            if (t.length === 0) continue;
+            for (const h of entry.highlights ?? []) {
+              mergedHighlights.push({
+                start: h.start + offset,
+                end: h.end + offset,
+                color: h.color,
+              });
+            }
+            for (const s of entry.strikethroughs ?? []) {
+              mergedStrikethroughs.push({
+                start: s.start + offset,
+                end: s.end + offset,
+              });
+            }
+            offset += t.length + 1;
+          }
           return (
             <View key={dateStr} style={styles.section}>
               <Text style={styles.sectionHeader}>
@@ -159,12 +183,14 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
                 ) : (
                   <>
-                    <Text
+                    <HighlightedText
+                      text={mergedText || ' '}
+                      highlights={mergedHighlights}
+                      strikethroughs={mergedStrikethroughs}
                       style={styles.mergedBody}
                       numberOfLines={5}
-                      ellipsizeMode="tail">
-                      {mergedText || ' '}
-                    </Text>
+                      ellipsizeMode="tail"
+                    />
                     {allPhotos.length > 0 && (
                       <ScrollView
                         horizontal
