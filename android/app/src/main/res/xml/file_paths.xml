@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="backup" path="." />
+    <files-path name="backup_files" path="DailyStoryBackup/" />
+    <files-path name="files" path="." />
+</paths>

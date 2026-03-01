@@ -28,10 +28,10 @@ import { TabScreenLayout } from '../components/TabScreenLayout';
 import { BackupPopupMenu } from '../components/BackupPopupMenu';
 import { exportBackup, importBackup } from '../services/backupService';
 import { useEntriesRefresh } from '../context/EntriesRefreshContext';
-import type { HomeStackParamList, RootStackParamList } from './types';
+import type { HomeStackParamList, RootStackParamList, TabParamList } from './types';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<TabParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 const AppTheme = {
