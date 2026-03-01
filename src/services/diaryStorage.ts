@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DiaryEntry } from '../types/diary';
+import { DEFAULT_FONT_SIZE } from '../types/diary';
 
 const STORAGE_KEY = '@daily_story_entries';
 
@@ -7,10 +8,11 @@ export async function getAllEntries(): Promise<DiaryEntry[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const list = JSON.parse(raw) as (Omit<DiaryEntry, 'tags'> & { tags?: string[] })[];
+    const list = JSON.parse(raw) as (Omit<DiaryEntry, 'tags'> & { tags?: string[]; fontSize?: number })[];
     return (Array.isArray(list) ? list : []).map(e => ({
       ...e,
       tags: e.tags ?? [],
+      fontSize: e.fontSize ?? DEFAULT_FONT_SIZE,
     })) as DiaryEntry[];
   } catch {
     return [];
@@ -64,6 +66,7 @@ export async function addEntry(entry: {
   text: string;
   imageUris: string[];
   tags?: string[];
+  fontSize?: number;
 }): Promise<DiaryEntry> {
   const all = await getAllEntries();
   const newEntry: DiaryEntry = {
@@ -73,6 +76,7 @@ export async function addEntry(entry: {
     imageUris: entry.imageUris ?? [],
     tags: entry.tags ?? [],
     createdAt: Date.now(),
+    fontSize: entry.fontSize ?? DEFAULT_FONT_SIZE,
   };
   all.push(newEntry);
   await saveAllEntries(all);
@@ -86,7 +90,7 @@ export async function getEntryById(id: string): Promise<DiaryEntry | null> {
 
 export async function updateEntry(
   id: string,
-  updates: { text?: string; imageUris?: string[]; tags?: string[] },
+  updates: { text?: string; imageUris?: string[]; tags?: string[]; fontSize?: number },
 ): Promise<DiaryEntry | null> {
   const all = await getAllEntries();
   const idx = all.findIndex(e => e.id === id);
@@ -97,6 +101,7 @@ export async function updateEntry(
     text: updates.text !== undefined ? updates.text.trim() : all[idx].text,
     imageUris: updates.imageUris ?? all[idx].imageUris,
     tags: updates.tags ?? all[idx].tags,
+    fontSize: updates.fontSize ?? all[idx].fontSize ?? DEFAULT_FONT_SIZE,
   };
   await saveAllEntries(all);
   return all[idx];
@@ -236,6 +241,7 @@ export async function seedYearFromTemplate(templateDate: string): Promise<number
           imageUris: t.imageUris,
           tags: t.tags,
           createdAt: baseTime + offset,
+          fontSize: t.fontSize ?? DEFAULT_FONT_SIZE,
         };
         all.push(newEntry);
         added++;

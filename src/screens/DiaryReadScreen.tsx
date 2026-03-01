@@ -39,6 +39,7 @@ import {
 } from '../services/admobConfig';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import type { DiaryEntry } from '../types/diary';
+import { DEFAULT_FONT_SIZE } from '../types/diary';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'DiaryRead'>;
 
@@ -425,7 +426,13 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                           }));
                         }}>
                         <Text
-                          style={styles.entryText}
+                          style={[
+                            styles.entryText,
+                            {
+                              fontSize: entry.fontSize ?? DEFAULT_FONT_SIZE,
+                              lineHeight: (entry.fontSize ?? DEFAULT_FONT_SIZE) * 1.5,
+                            },
+                          ]}
                           onTextLayout={ev => {
                             const lines = ev.nativeEvent.lines;
                             if (lines.length > 0) {
@@ -667,8 +674,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   entryText: {
-    fontSize: 16,
-    lineHeight: 24,
     color: '#111827',
   },
   entryMetaRow: {

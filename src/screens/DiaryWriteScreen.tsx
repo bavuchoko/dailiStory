@@ -28,6 +28,7 @@ import {
   getDateString,
   getEntryById,
 } from '../services/diaryStorage';
+import { DEFAULT_FONT_SIZE, FONT_SIZE_OPTIONS } from '../types/diary';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DiaryWrite'>;
 
@@ -39,6 +40,8 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
   const [images, setImages] = useState<ImageAsset[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagModalVisible, setTagModalVisible] = useState(false);
+  const [fontSizeModalVisible, setFontSizeModalVisible] = useState(false);
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(!entryId);
@@ -56,6 +59,7 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
         setText(entry.text);
         setImages(entry.imageUris.map(uri => ({ uri })));
         setTags(entry.tags ?? []);
+        setFontSize(entry.fontSize ?? DEFAULT_FONT_SIZE);
       }
       setLoaded(true);
     });
@@ -118,6 +122,7 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
                     text,
                     imageUris: images.map(i => i.uri),
                     tags,
+                    fontSize,
                   });
                 } else {
                   await addEntry({
@@ -125,6 +130,7 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
                     text,
                     imageUris: images.map(i => i.uri),
                     tags,
+                    fontSize,
                   });
                 }
                 navigation.goBack();
@@ -170,7 +176,13 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
             onChangeText={setText}
             placeholder="내용을 입력하세요..."
             placeholderTextColor="#9CA3AF"
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                fontSize,
+                lineHeight: fontSize * 1.5,
+              },
+            ]}
             multiline
             textAlignVertical="top"
           />
@@ -203,9 +215,40 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
             onPress={() => setTagModalVisible(true)}>
             <TagIcon size={22} color="#4f5052" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.toolButton}>
-            <TextSizeIcon size={22} color="#4f5052" />
-          </TouchableOpacity>
+          <View style={styles.fontSizeButtonWrap}>
+            {fontSizeModalVisible && (
+              <View
+                style={styles.fontSizeDropdown}
+                onStartShouldSetResponder={() => true}>
+                {FONT_SIZE_OPTIONS.map(size => (
+                  <TouchableOpacity
+                    key={size}
+                    style={[
+                      styles.fontSizeDropdownOption,
+                      fontSize === size && styles.fontSizeOptionActive,
+                    ]}
+                    onPress={() => {
+                      setFontSize(size);
+                      setFontSizeModalVisible(false);
+                    }}>
+                    <Text
+                      style={[
+                        styles.fontSizeOptionText,
+                        { fontSize: size },
+                        fontSize === size && styles.fontSizeOptionTextActive,
+                      ]}>
+                      {size}pt
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.toolButton}
+              onPress={() => setFontSizeModalVisible(prev => !prev)}>
+              <TextSizeIcon size={22} color="#4f5052" />
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity style={styles.toolButton} onPress={handlePickImage}>
             <PhotoIcon size={22} color="#4f5052" />
           </TouchableOpacity>
@@ -379,7 +422,6 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 16,
     color: '#111827',
   },
   bottomBar: {
@@ -478,6 +520,41 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#6B7280',
+  },
+  fontSizeButtonWrap: {
+    position: 'relative',
+  },
+  fontSizeDropdown: {
+    position: 'absolute',
+    bottom: '100%',
+    left: '50%',
+    marginBottom: 8,
+    marginLeft: -70,
+    width: 140,
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  fontSizeDropdownOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  fontSizeOptionActive: {
+    backgroundColor: '#E5E7EB',
+  },
+  fontSizeOptionText: {
+    color: '#374151',
+  },
+  fontSizeOptionTextActive: {
+    fontWeight: '600',
+    color: '#111827',
   },
 });
 
