@@ -214,9 +214,6 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
                         ))}
                       </ScrollView>
                     )}
-                    <TouchableOpacity style={styles.shareRow}>
-                      <Text style={styles.shareText}>공유</Text>
-                    </TouchableOpacity>
                   </>
                 )}
               </TouchableOpacity>
