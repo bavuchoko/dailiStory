@@ -8,7 +8,8 @@ import {
   Animated,
   Pressable,
 } from 'react-native';
-import FeatherIcon from 'react-native-vector-icons/Feather';
+import { CloudArrowUpFillIcon } from './icons/CloudArrowUpFillIcon';
+import { CloudArrowDownFillIcon } from './icons/CloudArrowDownFillIcon';
 
 type Props = {
   visible: boolean;
@@ -87,25 +88,15 @@ export const BackupPopupMenu: React.FC<Props> = ({
               style={styles.menuItem}
               onPress={handleExport}
               activeOpacity={0.7}>
-              <FeatherIcon
-                name="upload-cloud"
-                size={22}
-                color="#111827"
-                style={styles.menuIcon}
-              />
-              <Text style={styles.menuItemText}>내보내기</Text>
+              <CloudArrowUpFillIcon size={22} color="#111827" />
+              <Text style={[styles.menuItemText, styles.menuItemTextWithIcon]}>내보내기</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.menuItem}
               onPress={handleImport}
               activeOpacity={0.7}>
-              <FeatherIcon
-                name="download-cloud"
-                size={22}
-                color="#111827"
-                style={styles.menuIcon}
-              />
-              <Text style={styles.menuItemText}>가져오기</Text>
+              <CloudArrowDownFillIcon size={22} color="#111827" />
+              <Text style={[styles.menuItemText, styles.menuItemTextWithIcon]}>가져오기</Text>
             </TouchableOpacity>
           </Animated.View>
         </Pressable>
@@ -144,8 +135,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
   },
-  menuIcon: {
-    marginRight: 12,
+  menuItemTextWithIcon: {
+    marginLeft: 12,
   },
   menuItemText: {
     fontSize: 14,

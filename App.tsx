@@ -6,12 +6,21 @@
  */
 
 import React from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform, StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import mobileAds from 'react-native-google-mobile-ads';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { initIapIfAvailable } from './src/services/purchaseService';
+
+// Google Drive 백업용 (Android). webClientId는 Google Cloud Console에서 발급한 Web Client ID로 교체하세요.
+if (Platform.OS === 'android') {
+  GoogleSignin.configure({
+    webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+    scopes: ['https://www.googleapis.com/auth/drive.appdata'],
+  });
+}
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import {
   createBottomTabNavigator,
@@ -26,6 +26,7 @@ import { SearchScreen } from '../screens/SearchScreen';
 import { StatsScreen } from '../screens/StatsScreen';
 import { TabScreenLayout } from '../components/TabScreenLayout';
 import { BackupPopupMenu } from '../components/BackupPopupMenu';
+import { exportBackup, importBackup } from '../services/backupService';
 import type { HomeStackParamList, RootStackParamList } from './types';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -140,6 +141,26 @@ const CenterHomeButton: React.FC<BottomTabBarButtonProps> = ({ onPress }) => (
 
 const TabsNavigator = ({ navigation }: { navigation: any }) => {
   const [backupPopupVisible, setBackupPopupVisible] = useState(false);
+
+  const handleExport = useCallback(async () => {
+    setBackupPopupVisible(false);
+    const result = await exportBackup();
+    if (result.success) {
+      Alert.alert('내보내기 완료', '일기 데이터가 클라우드에 백업되었습니다.');
+    } else {
+      Alert.alert('내보내기 실패', result.error);
+    }
+  }, []);
+
+  const handleImport = useCallback(async () => {
+    setBackupPopupVisible(false);
+    const result = await importBackup();
+    if (result.success) {
+      Alert.alert('가져오기 완료', `${result.count}개의 일기가 복원되었습니다.`);
+    } else {
+      Alert.alert('가져오기 실패', result.error);
+    }
+  }, []);
 
   return (
     <>
@@ -259,6 +280,8 @@ const TabsNavigator = ({ navigation }: { navigation: any }) => {
     <BackupPopupMenu
         visible={backupPopupVisible}
         onClose={() => setBackupPopupVisible(false)}
+        onExport={handleExport}
+        onImport={handleImport}
     />
     </>
   );
