@@ -5,3 +5,6 @@ export const ADMOB_APP_ID_ANDROID = 'ca-app-pub-8998366944335616~4298020698';
 export const ADMOB_BANNER_UNIT_ID_ANDROID =
   'ca-app-pub-8998366944335616/3969553914';
 
+/** 개발/테스트용 배너 ID (항상 광고 표시) - __DEV__에서 사용 */
+export const ADMOB_BANNER_TEST_ANDROID = 'ca-app-pub-3940256099942544/6300978111';
+

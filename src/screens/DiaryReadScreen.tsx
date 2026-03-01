@@ -36,6 +36,7 @@ import { getIsPaid } from '../services/paidStorage';
 import {
   ADMOB_BANNER_UNIT_ID_ANDROID,
   ADMOB_BANNER_UNIT_ID_IOS,
+  ADMOB_BANNER_TEST_ANDROID,
 } from '../services/admobConfig';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import type { DiaryEntry } from '../types/diary';
@@ -95,7 +96,11 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bannerUnitId =
-    Platform.OS === 'ios' ? ADMOB_BANNER_UNIT_ID_IOS : ADMOB_BANNER_UNIT_ID_ANDROID;
+    Platform.OS === 'ios'
+      ? ADMOB_BANNER_UNIT_ID_IOS
+      : __DEV__
+        ? ADMOB_BANNER_TEST_ANDROID
+        : ADMOB_BANNER_UNIT_ID_ANDROID;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -333,8 +338,13 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
             }}>
             <View style={styles.content}>
               {allPhotos.length > 0 && (
-                <View style={styles.photoGrid}>
-                  {allPhotos.map((uri, index) => (
+                <View style={[styles.photoScrollWrap, { height: photoSize }]}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.photoScroll}
+                    contentContainerStyle={styles.photoScrollContent}>
+                    {allPhotos.map((uri, index) => (
                     <TouchableOpacity
                       key={`${uri}-${index}`}
                       style={[
@@ -342,8 +352,7 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                         {
                           width: photoSize,
                           height: photoSize,
-                          marginRight: (index + 1) % 4 === 0 ? 0 : photoGap,
-                          marginBottom: photoGap,
+                          marginRight: index < allPhotos.length - 1 ? photoGap : 0,
                         },
                       ]}
                       onPress={() => openPhotoViewer(index)}
@@ -355,6 +364,7 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                       />
                     </TouchableOpacity>
                   ))}
+                  </ScrollView>
                 </View>
               )}
 
@@ -630,10 +640,17 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 5,
   },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
+  photoScrollWrap: {
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  photoScroll: {
+    flex: 1,
+    height: '100%',
+  },
+  photoScrollContent: {
+    paddingRight: 0,
+    alignItems: 'flex-start',
   },
   photoThumbWrap: {
     borderRadius: 8,
@@ -757,10 +774,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   adArea: {
-    minHeight: 60,
+    minHeight: 50,
     backgroundColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   adLabel: {
     fontSize: 12,

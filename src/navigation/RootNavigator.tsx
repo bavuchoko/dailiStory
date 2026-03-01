@@ -27,6 +27,7 @@ import { StatsScreen } from '../screens/StatsScreen';
 import { TabScreenLayout } from '../components/TabScreenLayout';
 import { BackupPopupMenu } from '../components/BackupPopupMenu';
 import { exportBackup, importBackup } from '../services/backupService';
+import { useEntriesRefresh } from '../context/EntriesRefreshContext';
 import type { HomeStackParamList, RootStackParamList } from './types';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -141,6 +142,7 @@ const CenterHomeButton: React.FC<BottomTabBarButtonProps> = ({ onPress }) => (
 
 const TabsNavigator = ({ navigation }: { navigation: any }) => {
   const [backupPopupVisible, setBackupPopupVisible] = useState(false);
+  const { bumpEntriesVersion } = useEntriesRefresh();
 
   const handleExport = useCallback(async () => {
     setBackupPopupVisible(false);
@@ -152,15 +154,28 @@ const TabsNavigator = ({ navigation }: { navigation: any }) => {
     }
   }, []);
 
-  const handleImport = useCallback(async () => {
+  const handleImport = useCallback(() => {
     setBackupPopupVisible(false);
-    const result = await importBackup();
-    if (result.success) {
-      Alert.alert('가져오기 완료', `${result.count}개의 일기가 복원되었습니다.`);
-    } else {
-      Alert.alert('가져오기 실패', result.error);
-    }
-  }, []);
+    Alert.alert(
+      '가져오기',
+      '클라우드에서 가져오면 기존 일기 데이터가 모두 삭제되고 백업 내용으로 덮어씌워집니다. 계속하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '가져오기',
+          onPress: async () => {
+            const result = await importBackup();
+            if (result.success) {
+              bumpEntriesVersion();
+              Alert.alert('가져오기 완료', `${result.count}개의 일기가 복원되었습니다.`);
+            } else {
+              Alert.alert('가져오기 실패', result.error);
+            }
+          },
+        },
+      ],
+    );
+  }, [bumpEntriesVersion]);
 
   return (
     <>

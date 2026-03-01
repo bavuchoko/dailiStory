@@ -15,6 +15,7 @@ import { getIsPaid } from '../services/paidStorage';
 import {
   ADMOB_BANNER_UNIT_ID_ANDROID,
   ADMOB_BANNER_UNIT_ID_IOS,
+  ADMOB_BANNER_TEST_ANDROID,
 } from '../services/admobConfig';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 
@@ -86,7 +87,11 @@ export const MonthCalendarScreen: React.FC<Props> = ({
   const [isPaid, setIsPaid] = useState(false);
   const insets = useSafeAreaInsets();
   const bannerUnitId =
-    Platform.OS === 'ios' ? ADMOB_BANNER_UNIT_ID_IOS : ADMOB_BANNER_UNIT_ID_ANDROID;
+    Platform.OS === 'ios'
+      ? ADMOB_BANNER_UNIT_ID_IOS
+      : __DEV__
+        ? ADMOB_BANNER_TEST_ANDROID
+        : ADMOB_BANNER_UNIT_ID_ANDROID;
 
   useFocusEffect(
     React.useCallback(() => {

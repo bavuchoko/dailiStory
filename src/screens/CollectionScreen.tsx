@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { HomeStackParamList } from '../navigation/types';
+import { useEntriesRefresh } from '../context/EntriesRefreshContext';
 import { TabScreenLayout } from '../components/TabScreenLayout';
 import { CalendarWeekIcon } from '../components/icons/CalendarWeekIcon';
 import { HighlightedText } from '../components/HighlightedText';
@@ -81,12 +82,17 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const visibleWidth = screenWidth - HORIZONTAL_INSET;
   const photoSize = (visibleWidth - PHOTO_GAP * 3) / 4;
+  const { entriesVersion } = useEntriesRefresh();
 
-  useFocusEffect(
-    useCallback(() => {
-      getEntriesByMonthDay(month, day).then(setEntries);
-    }, [month, day]),
-  );
+  const loadEntries = useCallback(() => {
+    getEntriesByMonthDay(month, day).then(setEntries);
+  }, [month, day]);
+
+  useFocusEffect(useCallback(() => { loadEntries(); }, [loadEntries]));
+
+  useEffect(() => {
+    loadEntries();
+  }, [entriesVersion, loadEntries]);
 
   useFocusEffect(
     useCallback(() => {
