@@ -10,6 +10,7 @@ import {
   Image,
   ScrollView,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FeatherIcon from 'react-native-vector-icons/Feather';
@@ -28,6 +29,11 @@ import {
   getDateString,
   getEntryById,
 } from '../services/diaryStorage';
+import {
+  copyImageToAppStorage,
+  saveBase64ToAppStorage,
+  getDisplayUri,
+} from '../services/imageStorage';
 import {
   DEFAULT_FONT_SIZE,
   FONT_SIZE_OPTIONS,
@@ -162,17 +168,27 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
       {
         mediaType: 'photo',
         selectionLimit: 5,
-        includeBase64: false,
+        includeBase64: true,
       },
-      res => {
+      async res => {
         if (res.didCancel) return;
         if (res.errorCode) return;
         const assets = res.assets?.filter(a => a.uri) ?? [];
-        if (assets.length) {
-          setImages(prev => [
-            ...prev,
-            ...assets.map(a => ({ uri: a.uri! })),
-          ].slice(0, 10));
+        if (assets.length === 0) return;
+        try {
+          const persistedUris = await Promise.all(
+            assets.map((a, i) =>
+              a.base64
+                ? saveBase64ToAppStorage(a.base64, i)
+                : copyImageToAppStorage(a.uri!),
+            ),
+          );
+          setImages(prev =>
+            [...prev, ...persistedUris.map(uri => ({ uri }))].slice(0, 10),
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : '사진을 저장할 수 없습니다.';
+          if (typeof Alert !== 'undefined') Alert.alert('사진 저장 실패', msg);
         }
       },
     );
@@ -244,7 +260,7 @@ export const DiaryWriteScreen: React.FC<Props> = ({ navigation, route }) => {
               contentContainerStyle={styles.imageListContent}>
               {images.map((img, index) => (
                 <View key={`${img.uri}-${index}`} style={styles.imageWrap}>
-                  <Image source={{ uri: img.uri }} style={styles.thumb} />
+                  <Image source={{ uri: getDisplayUri(img.uri) }} style={styles.thumb} />
                   <TouchableOpacity
                     style={styles.removeImage}
                     onPress={() =>

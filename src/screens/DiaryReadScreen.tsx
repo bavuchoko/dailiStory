@@ -41,6 +41,7 @@ import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import type { DiaryEntry } from '../types/diary';
 import { DEFAULT_FONT_SIZE } from '../types/diary';
 import { HighlightedText } from '../components/HighlightedText';
+import { getDisplayUri } from '../services/imageStorage';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'DiaryRead'>;
 
@@ -306,7 +307,7 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
         <View style={styles.dateHeader} {...panResponder.panHandlers}>
           {allPhotos.length > 0 ? (
             <ImageBackground
-              source={{ uri: allPhotos[0] }}
+              source={{ uri: getDisplayUri(allPhotos[0]) }}
               style={styles.dateHeaderBackground}
               resizeMode="cover">
               <View style={styles.dateHeaderOverlay} />
@@ -348,7 +349,7 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                       onPress={() => openPhotoViewer(index)}
                       activeOpacity={0.8}>
                       <Image
-                        source={{ uri }}
+                        source={{ uri: getDisplayUri(uri) }}
                         style={[styles.photoThumb, { width: photoSize, height: photoSize }]}
                         resizeMode="cover"
                       />
@@ -385,7 +386,7 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                     renderItem={({ item: uri }) => (
                       <View style={[styles.photoViewerSlide, { width: screenWidth }]}>
                         <Image
-                          source={{ uri }}
+                          source={{ uri: getDisplayUri(uri) }}
                           style={styles.photoViewerImage}
                           resizeMode="contain"
                         />

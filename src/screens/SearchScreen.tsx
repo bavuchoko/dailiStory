@@ -14,6 +14,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 
 import { TabScreenLayout } from '../components/TabScreenLayout';
 import { getEntriesByTag, getAllTags } from '../services/diaryStorage';
+import { getDisplayUri } from '../services/imageStorage';
 import type { DiaryEntry } from '../types/diary';
 import type { TabParamList } from '../navigation/types';
 
@@ -108,7 +109,7 @@ export const SearchScreen: React.FC<Props> = ({ navigation }) => {
             {item.imageUris.slice(0, 4).map((uri, i) => (
               <Image
                 key={i}
-                source={{ uri }}
+                source={{ uri: getDisplayUri(uri) }}
                 style={[styles.thumb, { width: PHOTO_SIZE, height: PHOTO_SIZE }]}
               />
             ))}

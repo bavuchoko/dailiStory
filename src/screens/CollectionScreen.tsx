@@ -16,6 +16,7 @@ import { TabScreenLayout } from '../components/TabScreenLayout';
 import { CalendarWeekIcon } from '../components/icons/CalendarWeekIcon';
 import { HighlightedText } from '../components/HighlightedText';
 import { getEntriesByMonthDay } from '../services/diaryStorage';
+import { getDisplayUri } from '../services/imageStorage';
 import type { DiaryEntry, HighlightRange, StrikethroughRange } from '../types/diary';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Collection'>;
@@ -200,7 +201,7 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
                         {allPhotos.map((uri, i) => (
                           <Image
                             key={`${uri}-${i}`}
-                            source={{ uri }}
+                            source={{ uri: getDisplayUri(uri) }}
                             style={[
                               styles.photoThumb,
                               {

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { getEntriesByDate, getDateString } from '../services/diaryStorage';
+import { getDisplayUri } from '../services/imageStorage';
 import type { DiaryEntry } from '../types/diary';
 import { BookIcon } from '../components/icons/BookIcon';
 import { GiftIcon } from '../components/icons/GiftIcon';
@@ -211,7 +212,7 @@ export const MainScreen: React.FC<Props> = ({
                         {allPhotos.map((uri, i) => (
                           <Image
                             key={`${uri}-${i}`}
-                            source={{ uri }}
+                            source={{ uri: getDisplayUri(uri) }}
                             style={[
                               styles.recentPhotoThumb,
                               {
