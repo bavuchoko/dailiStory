@@ -15,6 +15,8 @@ import type { HomeStackParamList } from '../navigation/types';
 import { useEntriesRefresh } from '../context/EntriesRefreshContext';
 import { TabScreenLayout } from '../components/TabScreenLayout';
 import { CalendarWeekIcon } from '../components/icons/CalendarWeekIcon';
+import { ChevronLeftIcon } from '../components/icons/ChevronLeftIcon';
+import { ChevronRightIcon } from '../components/icons/ChevronRightIcon';
 import { HighlightedText } from '../components/HighlightedText';
 import { getEntriesByMonthDay } from '../services/diaryStorage';
 import { getDisplayUri } from '../services/imageStorage';
@@ -117,6 +119,18 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
     setCurrentDate(new Date());
   };
 
+  const handlePrevDay = () => {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() - 1);
+    setCurrentDate(d);
+  };
+
+  const handleNextDay = () => {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() + 1);
+    setCurrentDate(d);
+  };
+
   return (
     <TabScreenLayout>
       <View style={styles.headerRow}>
@@ -124,6 +138,18 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
           {month}월 {day}일
         </Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handlePrevDay}
+            style={styles.headerChevronBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <ChevronLeftIcon size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleNextDay}
+            style={styles.headerChevronBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <ChevronRightIcon size={24} color="#6B7280" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={handlePressToday}
             style={styles.headerTodayBtn}
@@ -247,6 +273,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: '#111827',
+  },
+  headerChevronBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    marginRight: 4,
   },
   headerTodayBtn: {
     marginRight: 8,

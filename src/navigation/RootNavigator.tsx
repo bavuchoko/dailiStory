@@ -144,14 +144,26 @@ const TabsNavigator = ({ navigation }: { navigation: any }) => {
   const [backupPopupVisible, setBackupPopupVisible] = useState(false);
   const { bumpEntriesVersion } = useEntriesRefresh();
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(() => {
     setBackupPopupVisible(false);
-    const result = await exportBackup();
-    if (result.success) {
-      Alert.alert('내보내기 완료', '일기 데이터가 클라우드에 백업되었습니다.');
-    } else {
-      Alert.alert('내보내기 실패', result.error);
-    }
+    Alert.alert(
+      '내보내기',
+      '클라우드에 이미 백업이 있으면 현재 데이터로 덮어씌워집니다. 계속하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '내보내기',
+          onPress: async () => {
+            const result = await exportBackup();
+            if (result.success) {
+              Alert.alert('내보내기 완료', '일기 데이터가 클라우드에 백업되었습니다.');
+            } else {
+              Alert.alert('내보내기 실패', result.error);
+            }
+          },
+        },
+      ],
+    );
   }, []);
 
   const handleImport = useCallback(() => {

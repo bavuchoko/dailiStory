@@ -16,6 +16,7 @@ import {
   FlatList,
   useWindowDimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -37,6 +38,7 @@ import {
   ADMOB_BANNER_UNIT_ID_ANDROID,
   ADMOB_BANNER_UNIT_ID_IOS,
   ADMOB_BANNER_TEST_ANDROID,
+  ADMOB_BANNER_TEST_IOS,
 } from '../services/admobConfig';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import type { DiaryEntry } from '../types/diary';
@@ -97,7 +99,9 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const bannerUnitId =
     Platform.OS === 'ios'
-      ? ADMOB_BANNER_UNIT_ID_IOS
+      ? __DEV__
+        ? ADMOB_BANNER_TEST_IOS
+        : ADMOB_BANNER_UNIT_ID_IOS
       : __DEV__
         ? ADMOB_BANNER_TEST_ANDROID
         : ADMOB_BANNER_UNIT_ID_ANDROID;
@@ -270,13 +274,30 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   const handlePressEdit = (entryId: string) => {
-    const root = (navigation as any).getParent()?.getParent();
-    root?.navigate('DiaryWrite', { date: dateStr, entryId });
+    Alert.alert('일기 수정', '이 일기를 수정하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '수정',
+        onPress: () => {
+          const root = (navigation as any).getParent()?.getParent();
+          root?.navigate('DiaryWrite', { date: dateStr, entryId });
+        },
+      },
+    ]);
   };
 
-  const handlePressDelete = async (entryId: string) => {
-    const ok = await deleteEntry(entryId);
-    if (ok) getEntriesByDate(currentDate).then(setEntries);
+  const handlePressDelete = (entryId: string) => {
+    Alert.alert('일기 삭제', '이 일기를 삭제하시겠습니까? 삭제된 일기는 복원할 수 없습니다.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          const ok = await deleteEntry(entryId);
+          if (ok) getEntriesByDate(currentDate).then(setEntries);
+        },
+      },
+    ]);
   };
 
   const openPhotoViewer = (index: number) => {
