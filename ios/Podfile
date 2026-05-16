@@ -8,6 +8,9 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
+# 안정적인 iOS 빌드를 위해 New Architecture 비활성화
+ENV['RCT_NEW_ARCH_ENABLED'] = '0'
+
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
   Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
@@ -30,5 +33,24 @@ target 'dailyStory' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Xcode/clang 최신 버전에서 일부 Pod가 경고를 에러로 처리하며 빌드가 실패하는 케이스가 있습니다.
+    # (예: -Wnon-modular-include-in-framework-module, -Wmismatched-parameter-types)
+    # 앱 타겟이 아니라 Pods 타겟에만 완화 설정을 적용합니다.
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |config|
+        config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+
+        other_cflags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+        unless other_cflags.to_s.include?('-Wno-non-modular-include-in-framework-module')
+          other_cflags = "#{other_cflags} -Wno-non-modular-include-in-framework-module"
+        end
+        unless other_cflags.to_s.include?('-Wno-mismatched-parameter-types')
+          other_cflags = "#{other_cflags} -Wno-mismatched-parameter-types"
+        end
+        config.build_settings['OTHER_CFLAGS'] = other_cflags
+      end
+    end
   end
 end

@@ -14,3 +14,8 @@ export async function getIsPaid(): Promise<boolean> {
 export async function setPaid(purchased: boolean): Promise<void> {
   await AsyncStorage.setItem(PAID_KEY, purchased ? 'true' : 'false');
 }
+
+/** 테스트용: 유료 상태 초기화 (광고 다시 표시) */
+export async function resetPaidForTesting(): Promise<void> {
+  await AsyncStorage.setItem(PAID_KEY, 'false');
+}

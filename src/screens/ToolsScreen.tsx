@@ -14,6 +14,7 @@ import {
   purchaseAdRemoval,
   restorePurchases,
 } from '../services/purchaseService';
+import { resetPaidForTesting } from '../services/paidStorage';
 import {
   seedYearFromTemplate,
   clearAllEntries,
@@ -98,6 +99,11 @@ export const ToolsScreen: React.FC = () => {
     <TabScreenLayout>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>광고 제거</Text>
+        {__DEV__ && (
+          <Text style={styles.sectionHint}>
+            현재 상태: {isPaid ? '유료 (광고 숨김)' : '무료 (광고 표시)'}
+          </Text>
+        )}
         {isPaid ? (
           <Text style={styles.paidLabel}>유료 구매됨 · 광고가 표시되지 않습니다.</Text>
         ) : (
@@ -121,6 +127,23 @@ export const ToolsScreen: React.FC = () => {
           </>
         )}
       </View>
+      {__DEV__ && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>테스트용</Text>
+          <Text style={styles.sectionHint}>
+            Sandbox 구매 후 재설치해도 구매가 복원되어 광고가 안 뜰 수 있습니다.
+          </Text>
+          <TouchableOpacity
+            style={[styles.buttonSecondary, styles.devButton]}
+            onPress={async () => {
+              await resetPaidForTesting();
+              setIsPaid(false);
+              Alert.alert('초기화', '유료 상태가 초기화되었습니다. 광고가 다시 표시됩니다.');
+            }}>
+            <Text style={styles.buttonSecondaryText}>유료 상태 초기화 (광고 다시 표시)</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {/*{__DEV__ && (*/}
       {/*  <View style={styles.section}>*/}
       {/*    <Text style={styles.sectionTitle}>개발용</Text>*/}
