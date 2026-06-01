@@ -134,7 +134,7 @@ export async function buildBackupPayload(): Promise<string> {
   }
 
   const payload: BackupPayload = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     entries: backupEntries,
   };
@@ -163,7 +163,7 @@ export async function restoreFromBackupPayload(json: string): Promise<BackupImpo
         imageUris.push(uri);
       }
       restored.push({
-        id: e.id,
+        id: e.date,
         date: e.date,
         text: e.text,
         tags: e.tags ?? [],

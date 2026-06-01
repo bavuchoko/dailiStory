@@ -42,9 +42,22 @@ const AppTheme = {
   },
 };
 
+const hiddenHeaderBackTitle = {
+  headerBackTitle: '',
+  headerBackTitleVisible: false,
+};
+
+const calendarScreenHeader = {
+  headerShown: false,
+};
+
 const HomeStackNavigator = () => {
   return (
-    <HomeStack.Navigator>
+    <HomeStack.Navigator
+      screenOptions={{
+        headerShadowVisible: false,
+        headerBackTitleVisible: false,
+      }}>
       <HomeStack.Screen
         name="Splash"
         component={SplashScreen}
@@ -53,12 +66,12 @@ const HomeStackNavigator = () => {
       <HomeStack.Screen
         name="Main"
         component={MainScreenWrapper}
-        options={{ headerShown: false }}
+        options={{ headerShown: false, ...hiddenHeaderBackTitle }}
       />
       <HomeStack.Screen
         name="Collection"
         component={CollectionScreen}
-        options={{ headerShown: false }}
+        options={{ headerShown: false, ...hiddenHeaderBackTitle }}
       />
       <HomeStack.Screen
         name="DiaryRead"
@@ -66,17 +79,24 @@ const HomeStackNavigator = () => {
         options={{
           gestureEnabled: false,
           headerShown: false,
+          ...hiddenHeaderBackTitle,
         }}
       />
       <HomeStack.Screen
         name="YearCalendar"
         component={YearCalendarScreen}
-        options={{ title: '연도 선택' }}
+        options={{
+          ...calendarScreenHeader,
+          ...hiddenHeaderBackTitle,
+        }}
       />
       <HomeStack.Screen
         name="MonthCalendar"
         component={MonthCalendarScreen}
-        options={{ title: '월 선택' }}
+        options={{
+          ...calendarScreenHeader,
+          ...hiddenHeaderBackTitle,
+        }}
       />
     </HomeStack.Navigator>
   );

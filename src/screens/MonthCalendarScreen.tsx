@@ -7,10 +7,14 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { HomeStackParamList } from '../navigation/types';
+import { ChevronLeftIcon } from '../components/icons/ChevronLeftIcon';
 import { getIsPaid } from '../services/paidStorage';
 import {
   ADMOB_BANNER_UNIT_ID_ANDROID,
@@ -124,7 +128,15 @@ export const MonthCalendarScreen: React.FC<Props> = ({
   const labels = ['일', '월', '화', '수', '목', '금', '토'];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <ChevronLeftIcon size={24} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
       <View style={styles.content}>
       <Text style={styles.title}>
         {year}년 {month}월
@@ -187,7 +199,7 @@ export const MonthCalendarScreen: React.FC<Props> = ({
           />
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -196,9 +208,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  topBar: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+  },
+  backBtn: {
+    padding: 4,
+    alignSelf: 'flex-start',
+  },
   content: {
     flex: 1,
-    paddingTop: 24,
+    paddingTop: 8,
     paddingHorizontal: 12,
   },
   title: {

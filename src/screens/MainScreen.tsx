@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,13 @@ import {
   ScrollView,
   Image,
   Platform,
+  PixelRatio,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { getEntriesByDate, getDateString } from '../services/diaryStorage';
+import { getEntryByDate, getDateString } from '../services/diaryStorage';
 import { getDisplayUri } from '../services/imageStorage';
 import type { DiaryEntry } from '../types/diary';
 import { BookIcon } from '../components/icons/BookIcon';
@@ -20,6 +21,12 @@ import { GiftIcon } from '../components/icons/GiftIcon';
 
 const PHOTO_GAP = 8;
 const RECENT_DAYS = 4;
+const SCREEN_HORIZONTAL_PADDING = 24;
+const CALENDAR_WEEKS_BEFORE = 52;
+const CALENDAR_WEEKS_AFTER = 52;
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const VISIBLE_DAY_COUNT = 7;
+const MONTH_LABEL_LINE_HEIGHT = 14;
 
 type Props = {
   onPressDiary: () => void;
@@ -27,45 +34,16 @@ type Props = {
   onPressDate?: (date: Date) => void;
 };
 
-type WeekDay = {
+type CalendarDay = {
   key: string;
   label: string;
   date: number;
+  weekday: number;
+  fullDate: Date;
   isToday: boolean;
+  showMonthLabel: boolean;
+  monthLabel: string;
 };
-
-function getStartOfWeek(date: Date) {
-  const d = new Date(date);
-  const day = d.getDay(); // 0 (일) - 6 (토)
-  const diff = d.getDate() - day;
-  return new Date(d.getFullYear(), d.getMonth(), diff);
-}
-
-function buildWeek(date: Date): WeekDay[] {
-  const today = new Date();
-  const start = getStartOfWeek(date);
-  const labels = ['일', '월', '화', '수', '목', '금', '토'];
-
-  return Array.from({ length: 7 }).map((_, index) => {
-    const current = new Date(
-      start.getFullYear(),
-      start.getMonth(),
-      start.getDate() + index,
-    );
-
-    const isToday =
-      current.getFullYear() === today.getFullYear() &&
-      current.getMonth() === today.getMonth() &&
-      current.getDate() === today.getDate();
-
-    return {
-      key: `${current.toISOString()}`,
-      label: labels[current.getDay()],
-      date: current.getDate(),
-      isToday,
-    };
-  });
-}
 
 function addDays(date: Date, amount: number): Date {
   const next = new Date(date);
@@ -73,20 +51,139 @@ function addDays(date: Date, amount: number): Date {
   return next;
 }
 
+function getStartOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const weekday = d.getDay();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - weekday);
+}
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function buildDay(date: Date, today: Date): CalendarDay {
+  const weekday = date.getDay();
+  return {
+    key: getDateString(date),
+    label: WEEKDAY_LABELS[weekday],
+    date: date.getDate(),
+    weekday,
+    fullDate: date,
+    isToday: isSameCalendarDay(date, today),
+  };
+}
+
+function isDayBeforeLastDayOfMonth(date: Date): boolean {
+  const tomorrow = addDays(date, 1);
+  const dayAfterTomorrow = addDays(date, 2);
+  return (
+    tomorrow.getMonth() === date.getMonth() &&
+    dayAfterTomorrow.getMonth() !== date.getMonth()
+  );
+}
+
+function isDifferentMonth(a: Date, b: Date): boolean {
+  return a.getMonth() !== b.getMonth() || a.getFullYear() !== b.getFullYear();
+}
+
+function shouldShowMonthLabel(
+  date: Date,
+  prevCalendarDay: Date | null,
+): boolean {
+  if (!prevCalendarDay) return true;
+  if (isDifferentMonth(prevCalendarDay, date)) return true;
+  return isDayBeforeLastDayOfMonth(date);
+}
+
+function buildCalendarDays(anchor: Date): CalendarDay[] {
+  const today = new Date();
+  const anchorWeekStart = getStartOfWeek(anchor);
+  const firstWeekStart = addDays(anchorWeekStart, -CALENDAR_WEEKS_BEFORE * 7);
+  const totalWeeks = CALENDAR_WEEKS_BEFORE + CALENDAR_WEEKS_AFTER + 1;
+  const result: CalendarDay[] = [];
+  let prevCalendarDay: Date | null = null;
+
+  for (let weekIndex = 0; weekIndex < totalWeeks; weekIndex += 1) {
+    const weekStart = addDays(firstWeekStart, weekIndex * 7);
+    const weekDates = Array.from({ length: 7 }, (_, dayIndex) =>
+      addDays(weekStart, dayIndex),
+    );
+
+    for (let dayIndex = 0; dayIndex < weekDates.length; dayIndex += 1) {
+      const date = weekDates[dayIndex];
+      const base = buildDay(date, today);
+      const showMonthLabel = shouldShowMonthLabel(date, prevCalendarDay);
+
+      result.push({
+        ...base,
+        showMonthLabel,
+        monthLabel: `${date.getMonth() + 1}월`,
+      });
+
+      prevCalendarDay = date;
+    }
+  }
+
+  return result;
+}
+
 export const MainScreen: React.FC<Props> = ({
   onPressDiary,
   onPressCollection,
   onPressDate,
 }) => {
-  const today = new Date();
-  const week = buildWeek(today);
+  const today = useMemo(() => new Date(), []);
+  const calendarDays = useMemo(() => buildCalendarDays(today), [today]);
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const cardContentWidth = screenWidth - 24 * 2 - 16 * 2;
+  const cardContentWidth = screenWidth - SCREEN_HORIZONTAL_PADDING * 2 - 16 * 2;
   const photoSize = (cardContentWidth - PHOTO_GAP * 3) / 4;
+  const calendarWidth = screenWidth - SCREEN_HORIZONTAL_PADDING * 2;
+  const dayItemWidth = PixelRatio.roundToNearestPixel(
+    calendarWidth / VISIBLE_DAY_COUNT,
+  );
+  const daySnapOffsets = useMemo(
+    () => calendarDays.map((_, index) => index * dayItemWidth),
+    [calendarDays, dayItemWidth],
+  );
+  const calendarScrollRef = useRef<ScrollView>(null);
+  const didInitialScroll = useRef(false);
+  const todayDayIndex = useMemo(
+    () => calendarDays.findIndex(d => d.key === getDateString(today)),
+    [calendarDays, today],
+  );
 
   const [dateOrder, setDateOrder] = useState<string[]>([]);
-  const [entriesByDate, setEntriesByDate] = useState<Record<string, DiaryEntry[]>>({});
+  const [entryByDate, setEntryByDate] = useState<Record<string, DiaryEntry | null>>({});
+
+  const snapToNearestDay = useCallback(
+    (offsetX: number, animated: boolean) => {
+      const maxOffset = Math.max(0, (calendarDays.length - 1) * dayItemWidth);
+      const index = Math.min(
+        calendarDays.length - 1,
+        Math.max(0, Math.round(offsetX / dayItemWidth)),
+      );
+      const targetX = Math.min(maxOffset, index * dayItemWidth);
+      if (Math.abs(offsetX - targetX) > 0.5) {
+        calendarScrollRef.current?.scrollTo({ x: targetX, animated });
+      }
+    },
+    [calendarDays.length, dayItemWidth],
+  );
+
+  useLayoutEffect(() => {
+    if (didInitialScroll.current || todayDayIndex < 0) return;
+    const weekStartIndex = Math.floor(todayDayIndex / 7) * 7;
+    calendarScrollRef.current?.scrollTo({
+      x: weekStartIndex * dayItemWidth,
+      animated: false,
+    });
+    didInitialScroll.current = true;
+  }, [dayItemWidth, todayDayIndex]);
 
   useFocusEffect(
     useCallback(() => {
@@ -98,12 +195,12 @@ export const MainScreen: React.FC<Props> = ({
       const order = dates.map(d => getDateString(d));
       setDateOrder(order);
       const load = async () => {
-        const next: Record<string, DiaryEntry[]> = {};
+        const next: Record<string, DiaryEntry | null> = {};
         for (const d of dates) {
           const key = getDateString(d);
-          next[key] = await getEntriesByDate(d);
+          next[key] = await getEntryByDate(d);
         }
-        setEntriesByDate(next);
+        setEntryByDate(next);
       };
       load();
     }, []),
@@ -120,31 +217,59 @@ export const MainScreen: React.FC<Props> = ({
       ]}>
       <Text style={styles.titleText}>Daily Story</Text>
       <View style={styles.weekContainer}>
-        <View style={styles.weekRow}>
-          {week.map(item => (
-            <View
-              key={item.key}
-              style={[
-                styles.weekItem,
-                item.isToday && styles.weekItemTodayContainer,
-              ]}>
-              <Text
-                style={[
-                  styles.weekDayLabel,
-                  item.isToday && styles.weekItemTodayText,
-                ]}>
-                {item.label}
-              </Text>
-              <Text
-                style={[
-                  styles.weekDayNumber,
-                  item.isToday && styles.weekItemTodayText,
-                ]}>
-                {item.date}
-              </Text>
-            </View>
-          ))}
-        </View>
+        <ScrollView
+          ref={calendarScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToOffsets={daySnapOffsets}
+          snapToAlignment="start"
+          disableIntervalMomentum
+          onScrollEndDrag={e => {
+            const velocityX = e.nativeEvent.velocity?.x ?? 0;
+            if (Math.abs(velocityX) < 0.15) {
+              snapToNearestDay(e.nativeEvent.contentOffset.x, true);
+            }
+          }}
+          onMomentumScrollEnd={e =>
+            snapToNearestDay(e.nativeEvent.contentOffset.x, true)
+          }
+          style={styles.weekScroll}
+          contentContainerStyle={styles.weekScrollContent}>
+          {calendarDays.map(item => {
+            const dayTextStyle = item.isToday
+              ? styles.weekItemTodayText
+              : item.weekday === 0
+                ? styles.weekDaySunday
+                : item.weekday === 6
+                  ? styles.weekDaySaturday
+                  : null;
+
+            return (
+              <View key={item.key} style={[styles.weekColumn, { width: dayItemWidth }]}>
+                {item.showMonthLabel ? (
+                  <Text style={styles.weekMonthLabel}>{item.monthLabel}</Text>
+                ) : (
+                  <View style={styles.weekMonthPlaceholder} />
+                )}
+                <TouchableOpacity
+                  onPress={() => onPressDate?.(item.fullDate)}
+                  style={[
+                    styles.weekItem,
+                    item.isToday && styles.weekItemTodayContainer,
+                  ]}
+                  accessibilityLabel={`${item.label} ${item.date}일`}>
+                  <Text style={[styles.weekDayLabel, dayTextStyle]}>
+                    {item.label}
+                  </Text>
+                  <Text style={[styles.weekDayNumber, dayTextStyle]}>
+                    {item.date}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View style={styles.cardRow}>
@@ -176,16 +301,12 @@ export const MainScreen: React.FC<Props> = ({
           contentContainerStyle={styles.recentScrollContent}
           showsVerticalScrollIndicator={false}>
           {dateOrder.map(dateStr => {
-            const dateEntries = entriesByDate[dateStr] ?? [];
-            if (dateEntries.length === 0) return null;
+            const dayEntry = entryByDate[dateStr];
+            if (!dayEntry) return null;
 
             const [y, m, d] = dateStr.split('-').map(Number);
-            const mergedText = [...dateEntries]
-              .sort((a, b) => a.createdAt - b.createdAt)
-              .map(e => (e.text ?? '').trim())
-              .filter(t => t.length > 0)
-              .join('\n');
-            const allPhotos = dateEntries.flatMap(e => e.imageUris);
+            const mergedText = (dayEntry.text ?? '').trim();
+            const allPhotos = dayEntry.imageUris;
 
             return (
               <View key={dateStr} style={styles.recentDaySection}>
@@ -241,7 +362,7 @@ export const MainScreen: React.FC<Props> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
   },
   titleText: {
     fontSize: 32,
@@ -254,17 +375,33 @@ const styles = StyleSheet.create({
   weekContainer: {
     marginBottom: 32,
   },
+  weekScroll: {
+    width: '100%',
+  },
+  weekScrollContent: {
+    alignItems: 'flex-start',
+  },
+  weekColumn: {
+    alignItems: 'center',
+  },
   weekItem: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
     paddingHorizontal: 4,
     paddingVertical: 8,
+    minWidth: 36,
   },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  weekMonthLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    lineHeight: MONTH_LABEL_LINE_HEIGHT,
+    marginBottom: 2,
+  },
+  weekMonthPlaceholder: {
+    height: MONTH_LABEL_LINE_HEIGHT,
+    marginBottom: 2,
   },
   weekItemTodayContainer: {
     backgroundColor: '#111827',
@@ -281,6 +418,12 @@ const styles = StyleSheet.create({
   weekDayNumber: {
     fontSize: 16,
     color: '#111827',
+  },
+  weekDaySunday: {
+    color: '#DC2626',
+  },
+  weekDaySaturday: {
+    color: '#2563EB',
   },
   cardRow: {
     flexDirection: 'row',

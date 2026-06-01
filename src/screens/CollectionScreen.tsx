@@ -15,12 +15,10 @@ import type { HomeStackParamList } from '../navigation/types';
 import { useEntriesRefresh } from '../context/EntriesRefreshContext';
 import { TabScreenLayout } from '../components/TabScreenLayout';
 import { CalendarWeekIcon } from '../components/icons/CalendarWeekIcon';
-import { ChevronLeftIcon } from '../components/icons/ChevronLeftIcon';
-import { ChevronRightIcon } from '../components/icons/ChevronRightIcon';
 import { HighlightedText } from '../components/HighlightedText';
 import { getEntriesByMonthDay } from '../services/diaryStorage';
 import { getDisplayUri } from '../services/imageStorage';
-import type { DiaryEntry, HighlightRange, StrikethroughRange } from '../types/diary';
+import type { DiaryEntry } from '../types/diary';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Collection'>;
 
@@ -65,16 +63,15 @@ function dateStrToIso(dateStr: string): string {
   return new Date(y, m - 1, d).toISOString();
 }
 
-function formatEntryTime(createdAt: number): string {
-  const d = new Date(createdAt);
-  const h = `${d.getHours()}`.padStart(2, '0');
-  const m = `${d.getMinutes()}`.padStart(2, '0');
-  return `${h}:${m}`;
-}
-
 const PHOTO_GAP = 8;
 /** TabScreenLayout paddingHorizontal 24*2 + card padding 16*2 */
 const HORIZONTAL_INSET = 24 * 2 + 16 * 2;
+
+function addDays(date: Date, amount: number): Date {
+  const next = new Date(date);
+  next.setDate(date.getDate() + amount);
+  return next;
+}
 
 export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
   const { width: screenWidth } = useWindowDimensions();
@@ -119,16 +116,12 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
     setCurrentDate(new Date());
   };
 
-  const handlePrevDay = () => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() - 1);
-    setCurrentDate(d);
+  const goPrevDay = () => {
+    setCurrentDate(prev => addDays(prev, -1));
   };
 
-  const handleNextDay = () => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() + 1);
-    setCurrentDate(d);
+  const goNextDay = () => {
+    setCurrentDate(prev => addDays(prev, 1));
   };
 
   return (
@@ -139,16 +132,18 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
         </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
-            onPress={handlePrevDay}
-            style={styles.headerChevronBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <ChevronLeftIcon size={24} color="#6B7280" />
+            onPress={goPrevDay}
+            style={styles.dateNavDayBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+            accessibilityLabel="전날">
+            <Text style={styles.dateNavDayText}>전날</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={handleNextDay}
-            style={styles.headerChevronBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <ChevronRightIcon size={24} color="#6B7280" />
+            onPress={goNextDay}
+            style={styles.dateNavDayBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityLabel="다음날">
+            <Text style={styles.dateNavDayText}>다음날</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handlePressToday}
@@ -164,41 +159,17 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         {yearDates.map(dateStr => {
-          const dateEntries = grouped.get(dateStr) ?? [];
-          const allPhotos = dateEntries.flatMap(e => e.imageUris);
-          const sortedEntries = [...dateEntries].sort(
-            (a, b) => a.createdAt - b.createdAt,
-          );
-          const textParts = sortedEntries
-            .map(e => (e.text ?? '').trim())
-            .filter(t => t.length > 0);
-          const mergedText = textParts.join('\n');
-          let offset = 0;
-          const mergedHighlights: HighlightRange[] = [];
-          const mergedStrikethroughs: StrikethroughRange[] = [];
-          for (const entry of sortedEntries) {
-            const t = (entry.text ?? '').trim();
-            if (t.length === 0) continue;
-            for (const h of entry.highlights ?? []) {
-              mergedHighlights.push({
-                start: h.start + offset,
-                end: h.end + offset,
-                color: h.color,
-              });
-            }
-            for (const s of entry.strikethroughs ?? []) {
-              mergedStrikethroughs.push({
-                start: s.start + offset,
-                end: s.end + offset,
-              });
-            }
-            offset += t.length + 1;
-          }
+          const dayEntry = grouped.get(dateStr)?.[0] ?? null;
+          const allPhotos = dayEntry?.imageUris ?? [];
+          const mergedText = (dayEntry?.text ?? '').trim();
+          const mergedHighlights = dayEntry?.highlights ?? [];
+          const mergedStrikethroughs = dayEntry?.strikethroughs ?? [];
           return (
             <View key={dateStr} style={styles.section}>
               <Text style={styles.sectionHeader}>
@@ -210,7 +181,7 @@ export const CollectionScreen: React.FC<Props> = ({ navigation, route }) => {
                 onPress={() =>
                   navigation.navigate('DiaryRead', { date: dateStrToIso(dateStr) })
                 }>
-                {dateEntries.length === 0 ? (
+                {!dayEntry ? (
                   <View style={styles.emptySection}>
                     <Text style={styles.empty}>이 날짜의 일기가 없습니다.</Text>
                   </View>
@@ -268,19 +239,28 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   todayHeader: {
     fontSize: 22,
     fontWeight: '800',
     color: '#111827',
   },
-  headerChevronBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    marginRight: 4,
+  dateNavDayBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  dateNavDayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
   },
   headerTodayBtn: {
-    marginRight: 8,
+    marginLeft: 2,
   },
   headerTodayText: {
     fontSize: 16,

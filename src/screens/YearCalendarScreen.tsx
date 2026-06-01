@@ -9,9 +9,11 @@ import {
   GestureResponderEvent,
   PanResponderGestureState,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { HomeStackParamList } from '../navigation/types';
+import { ChevronLeftIcon } from '../components/icons/ChevronLeftIcon';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'YearCalendar'>;
 
@@ -119,7 +121,16 @@ export const YearCalendarScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   return (
-    <View style={styles.container} {...panResponder.panHandlers}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <ChevronLeftIcon size={24} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.container} {...panResponder.panHandlers}>
       <Text style={styles.yearText}>{year}년</Text>
 
       <FlatList
@@ -177,14 +188,27 @@ export const YearCalendarScreen: React.FC<Props> = ({ route, navigation }) => {
           );
         }}
       />
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  topBar: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+  },
+  backBtn: {
+    padding: 4,
+    alignSelf: 'flex-start',
+  },
   container: {
     flex: 1,
-    paddingTop: 24,
+    paddingTop: 8,
     paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
   },

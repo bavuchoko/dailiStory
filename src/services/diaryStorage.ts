@@ -2,37 +2,152 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DiaryEntry } from '../types/diary';
 import { DEFAULT_FONT_SIZE } from '../types/diary';
 
-const STORAGE_KEY = '@daily_story_entries';
+/** 날짜(YYYY-MM-DD) → 일기 1건 */
+type DiariesByDate = Record<string, DiaryEntry>;
 
-export async function getAllEntries(): Promise<DiaryEntry[]> {
+const STORAGE_KEY = '@daily_story_by_date';
+const LEGACY_STORAGE_KEY = '@daily_story_entries';
+
+function normalizeEntry(
+  e: Omit<DiaryEntry, 'tags'> & {
+    tags?: string[];
+    fontSize?: number;
+    highlights?: import('../types/diary').HighlightRange[];
+    strikethroughs?: import('../types/diary').StrikethroughRange[];
+  },
+): DiaryEntry {
+  return {
+    ...e,
+    id: e.date,
+    tags: e.tags ?? [],
+    fontSize: e.fontSize ?? DEFAULT_FONT_SIZE,
+    highlights: e.highlights ?? [],
+    strikethroughs: e.strikethroughs ?? [],
+  } as DiaryEntry;
+}
+
+function mergeSameDateEntries(entries: DiaryEntry[]): DiaryEntry {
+  if (entries.length === 1) return { ...entries[0], id: entries[0].date };
+
+  const sorted = [...entries].sort((a, b) => a.createdAt - b.createdAt);
+  const textParts = sorted.map(e => e.text.trim()).filter(Boolean);
+  const mergedText = textParts.join('\n\n');
+
+  const imageUris: string[] = [];
+  const seenImages = new Set<string>();
+  const tags: string[] = [];
+  const seenTags = new Set<string>();
+
+  for (const e of sorted) {
+    for (const uri of e.imageUris) {
+      if (!seenImages.has(uri)) {
+        seenImages.add(uri);
+        imageUris.push(uri);
+      }
+    }
+    for (const t of e.tags) {
+      const trimmed = t.trim();
+      if (trimmed && !seenTags.has(trimmed) && tags.length < 3) {
+        seenTags.add(trimmed);
+        tags.push(trimmed);
+      }
+    }
+  }
+
+  let offset = 0;
+  const mergedHighlights: import('../types/diary').HighlightRange[] = [];
+  const mergedStrikethroughs: import('../types/diary').StrikethroughRange[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const e = sorted[i];
+    const t = e.text.trim();
+    if (!t) continue;
+    for (const h of e.highlights ?? []) {
+      mergedHighlights.push({
+        start: h.start + offset,
+        end: h.end + offset,
+        color: h.color,
+      });
+    }
+    for (const s of e.strikethroughs ?? []) {
+      mergedStrikethroughs.push({
+        start: s.start + offset,
+        end: s.end + offset,
+      });
+    }
+    offset += t.length;
+    if (i < sorted.length - 1) offset += 2;
+  }
+
+  const primary = sorted[sorted.length - 1];
+  return normalizeEntry({
+    ...primary,
+    id: primary.date,
+    text: mergedText,
+    imageUris,
+    tags,
+    highlights: mergedHighlights,
+    strikethroughs: mergedStrikethroughs,
+    createdAt: sorted[0].createdAt,
+    updatedAt: primary.createdAt,
+  });
+}
+
+async function readStore(): Promise<DiariesByDate> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const list = JSON.parse(raw) as (Omit<DiaryEntry, 'tags'> & {
-      tags?: string[];
-      fontSize?: number;
-      highlights?: import('../types/diary').HighlightRange[];
-      strikethroughs?: import('../types/diary').StrikethroughRange[];
-    })[];
-    return (Array.isArray(list) ? list : []).map(e => ({
-      ...e,
-      tags: e.tags ?? [],
-      fontSize: e.fontSize ?? DEFAULT_FONT_SIZE,
-      highlights: e.highlights ?? [],
-      strikethroughs: e.strikethroughs ?? [],
-    })) as DiaryEntry[];
+    if (raw) {
+      const parsed = JSON.parse(raw) as DiariesByDate;
+      if (parsed && typeof parsed === 'object') {
+        const store: DiariesByDate = {};
+        for (const [date, entry] of Object.entries(parsed)) {
+          store[date] = normalizeEntry({ ...entry, date, id: date });
+        }
+        return store;
+      }
+    }
   } catch {
-    return [];
+    // fall through to legacy migration
   }
+
+  return migrateLegacyStore();
 }
 
-export async function saveAllEntries(entries: DiaryEntry[]): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+async function migrateLegacyStore(): Promise<DiariesByDate> {
+  const store: DiariesByDate = {};
+  try {
+    const legacyRaw = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacyRaw) return store;
+
+    const list = JSON.parse(legacyRaw) as DiaryEntry[];
+    if (!Array.isArray(list)) return store;
+
+    const byDate = new Map<string, DiaryEntry[]>();
+    for (const item of list) {
+      const normalized = normalizeEntry(item);
+      const listForDate = byDate.get(normalized.date) ?? [];
+      listForDate.push(normalized);
+      byDate.set(normalized.date, listForDate);
+    }
+
+    for (const [, group] of byDate) {
+      const merged = mergeSameDateEntries(group);
+      store[merged.date] = merged;
+    }
+
+    await writeStore(store);
+    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+  return store;
 }
 
-/** 모든 일기 삭제 (테스트용) */
-export async function clearAllEntries(): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+async function writeStore(store: DiariesByDate): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+}
+
+function entriesFromStore(store: DiariesByDate): DiaryEntry[] {
+  return Object.values(store).sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export function getDateString(date: Date): string {
@@ -42,30 +157,82 @@ export function getDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export async function getEntriesByDate(date: Date): Promise<DiaryEntry[]> {
-  const dateStr = getDateString(date);
-  const all = await getAllEntries();
-  return all
-    .filter(e => e.date === dateStr)
-    .sort((a, b) => a.createdAt - b.createdAt);
+export async function getAllEntries(): Promise<DiaryEntry[]> {
+  const store = await readStore();
+  return entriesFromStore(store);
 }
 
-/** 같은 월·일(MM-DD)인 모든 연도 일기, 연도 내림차순(최신 먼저) */
-export async function getEntriesByMonthDay(
-  month: number,
-  day: number,
-): Promise<DiaryEntry[]> {
-  const mm = `${month}`.padStart(2, '0');
-  const dd = `${day}`.padStart(2, '0');
-  const suffix = `-${mm}-${dd}`;
-  const all = await getAllEntries();
-  return all
-    .filter(e => e.date.endsWith(suffix))
-    .sort((a, b) => {
-      const yearA = parseInt(a.date.slice(0, 4), 10);
-      const yearB = parseInt(b.date.slice(0, 4), 10);
-      return yearB - yearA || a.createdAt - b.createdAt;
-    });
+export async function saveAllEntries(entries: DiaryEntry[]): Promise<void> {
+  const store: DiariesByDate = {};
+  const byDate = new Map<string, DiaryEntry[]>();
+
+  for (const e of entries) {
+    const normalized = normalizeEntry({ ...e, id: e.date });
+    const group = byDate.get(normalized.date) ?? [];
+    group.push(normalized);
+    byDate.set(normalized.date, group);
+  }
+
+  for (const [, group] of byDate) {
+    const merged = mergeSameDateEntries(group);
+    store[merged.date] = merged;
+  }
+
+  await writeStore(store);
+}
+
+export async function clearAllEntries(): Promise<void> {
+  await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_STORAGE_KEY]);
+}
+
+/** 해당 날짜의 일기 (하루 1건) */
+export async function getEntryByDate(date: Date): Promise<DiaryEntry | null> {
+  const store = await readStore();
+  return store[getDateString(date)] ?? null;
+}
+
+/** 하위 호환 — 0 또는 1건 */
+export async function getEntriesByDate(date: Date): Promise<DiaryEntry[]> {
+  const entry = await getEntryByDate(date);
+  return entry ? [entry] : [];
+}
+
+export async function getEntryById(id: string): Promise<DiaryEntry | null> {
+  const store = await readStore();
+  return store[id] ?? Object.values(store).find(e => e.id === id) ?? null;
+}
+
+export async function saveEntryForDate(
+  date: string,
+  data: {
+    text: string;
+    imageUris: string[];
+    tags?: string[];
+    fontSize?: number;
+    highlights?: import('../types/diary').HighlightRange[];
+    strikethroughs?: import('../types/diary').StrikethroughRange[];
+  },
+): Promise<DiaryEntry> {
+  const store = await readStore();
+  const now = Date.now();
+  const existing = store[date];
+
+  const entry: DiaryEntry = normalizeEntry({
+    id: date,
+    date,
+    text: data.text.trim(),
+    imageUris: data.imageUris ?? [],
+    tags: data.tags ?? [],
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    fontSize: data.fontSize ?? existing?.fontSize ?? DEFAULT_FONT_SIZE,
+    highlights: data.highlights ?? [],
+    strikethroughs: data.strikethroughs ?? [],
+  });
+
+  store[date] = entry;
+  await writeStore(store);
+  return entry;
 }
 
 export async function addEntry(entry: {
@@ -77,26 +244,7 @@ export async function addEntry(entry: {
   highlights?: import('../types/diary').HighlightRange[];
   strikethroughs?: import('../types/diary').StrikethroughRange[];
 }): Promise<DiaryEntry> {
-  const all = await getAllEntries();
-  const newEntry: DiaryEntry = {
-    id: `entry_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-    date: entry.date,
-    text: entry.text.trim(),
-    imageUris: entry.imageUris ?? [],
-    tags: entry.tags ?? [],
-    createdAt: Date.now(),
-    fontSize: entry.fontSize ?? DEFAULT_FONT_SIZE,
-    highlights: entry.highlights ?? [],
-    strikethroughs: entry.strikethroughs ?? [],
-  };
-  all.push(newEntry);
-  await saveAllEntries(all);
-  return newEntry;
-}
-
-export async function getEntryById(id: string): Promise<DiaryEntry | null> {
-  const all = await getAllEntries();
-  return all.find(e => e.id === id) ?? null;
+  return saveEntryForDate(entry.date, entry);
 }
 
 export async function updateEntry(
@@ -110,42 +258,61 @@ export async function updateEntry(
     strikethroughs?: import('../types/diary').StrikethroughRange[];
   },
 ): Promise<DiaryEntry | null> {
-  const all = await getAllEntries();
-  const idx = all.findIndex(e => e.id === id);
-  if (idx === -1) return null;
-  all[idx] = {
-    ...all[idx],
-    ...updates,
-    text: updates.text !== undefined ? updates.text.trim() : all[idx].text,
-    imageUris: updates.imageUris ?? all[idx].imageUris,
-    tags: updates.tags ?? all[idx].tags,
-    fontSize: updates.fontSize ?? all[idx].fontSize ?? DEFAULT_FONT_SIZE,
-    highlights: updates.highlights ?? all[idx].highlights ?? [],
-    strikethroughs: updates.strikethroughs ?? all[idx].strikethroughs ?? [],
-  };
-  await saveAllEntries(all);
-  return all[idx];
+  const store = await readStore();
+  const existing = store[id] ?? Object.values(store).find(e => e.id === id);
+  if (!existing) return null;
+
+  return saveEntryForDate(existing.date, {
+    text: updates.text ?? existing.text,
+    imageUris: updates.imageUris ?? existing.imageUris,
+    tags: updates.tags ?? existing.tags,
+    fontSize: updates.fontSize ?? existing.fontSize,
+    highlights: updates.highlights ?? existing.highlights,
+    strikethroughs: updates.strikethroughs ?? existing.strikethroughs,
+  });
 }
 
 export async function deleteEntry(id: string): Promise<boolean> {
-  const all = await getAllEntries();
-  const next = all.filter(e => e.id !== id);
-  if (next.length === all.length) return false;
-  await saveAllEntries(next);
+  const store = await readStore();
+  const date =
+    store[id] ? id : Object.values(store).find(e => e.id === id)?.date;
+  if (!date || !store[date]) return false;
+  delete store[date];
+  await writeStore(store);
   return true;
 }
 
-/** 태그가 하나 이상 포함된 일기 목록, 최신순 */
+export async function deleteEntryByDate(date: Date): Promise<boolean> {
+  const store = await readStore();
+  const dateStr = getDateString(date);
+  if (!store[dateStr]) return false;
+  delete store[dateStr];
+  await writeStore(store);
+  return true;
+}
+
+export async function getEntriesByMonthDay(
+  month: number,
+  day: number,
+): Promise<DiaryEntry[]> {
+  const mm = `${month}`.padStart(2, '0');
+  const dd = `${day}`.padStart(2, '0');
+  const suffix = `-${mm}-${dd}`;
+  const all = await getAllEntries();
+  return all
+    .filter(e => e.date.endsWith(suffix))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
 export async function getEntriesByTag(tag: string): Promise<DiaryEntry[]> {
   if (!tag.trim()) return [];
   const all = await getAllEntries();
   const lower = tag.trim().toLowerCase();
-  return all
-    .filter(e => e.tags.some(t => t.trim().toLowerCase() === lower))
-    .sort((a, b) => b.createdAt - a.createdAt);
+  return all.filter(e =>
+    e.tags.some(t => t.trim().toLowerCase() === lower),
+  );
 }
 
-/** 일기에서 사용된 모든 태그 (중복 제거, 정렬) */
 export async function getAllTags(): Promise<string[]> {
   const all = await getAllEntries();
   const set = new Set<string>();
@@ -159,17 +326,12 @@ export async function getAllTags(): Promise<string[]> {
 }
 
 export type YearStats = {
-  /** 해당 연도에 일기를 쓴 날 수(유일한 날짜 개수) */
   daysWithEntries: number;
-  /** 일기가 가장 많은 달 (1~12), 동점이면 최대 2개까지 [1월, 2월] 형식 */
   topMonths: number[];
-  /** 월별 일기 건수 [1월, 2월, ..., 12월] */
   monthCounts: number[];
-  /** 연도 내 가장 많이 달린 태그 순위 3위까지 (동점이면 같은 순위) */
   topTags: Array<{ tag: string; count: number; rank: number }>;
 };
 
-/** 특정 연도의 통계 */
 export async function getYearStats(year: number): Promise<YearStats> {
   const all = await getAllEntries();
   const prefix = `${year}-`;
@@ -215,10 +377,10 @@ export async function getYearStats(year: number): Promise<YearStats> {
   const topTags: Array<{ tag: string; count: number; rank: number }> = [];
   let prevCount = -1;
   let rank = 0;
-  for (const [tag, count] of tagEntries) {
+  for (const [t, count] of tagEntries) {
     if (topTags.length >= 3) break;
     if (count !== prevCount) rank += 1;
-    topTags.push({ tag, count, rank });
+    topTags.push({ tag: t, count, rank });
     prevCount = count;
   }
 
@@ -230,47 +392,34 @@ export async function getYearStats(year: number): Promise<YearStats> {
   };
 }
 
-/**
- * 특정 날짜의 일기를 해당 연도 1/1~12/31 전체로 복제 (테스트용)
- * @param templateDate 예: '2026-02-28'
- * @returns 추가된 일기 개수
- */
 export async function seedYearFromTemplate(templateDate: string): Promise<number> {
-  const all = await getAllEntries();
-  const template = all.filter(e => e.date === templateDate);
-  if (template.length === 0) return 0;
+  const store = await readStore();
+  const template = store[templateDate];
+  if (!template) return 0;
+
   const [y] = templateDate.split('-').map(Number);
-  const existingDates = new Set(all.map(e => e.date));
   let added = 0;
+
   for (let m = 1; m <= 12; m++) {
     const daysInMonth = new Date(y, m, 0).getDate();
     for (let d = 1; d <= daysInMonth; d++) {
       const mm = `${m}`.padStart(2, '0');
       const dd = `${d}`.padStart(2, '0');
       const dateStr = `${y}-${mm}-${dd}`;
-      if (dateStr === templateDate) continue;
-      if (existingDates.has(dateStr)) continue;
+      if (dateStr === templateDate || store[dateStr]) continue;
+
       const baseTime = new Date(y, m - 1, d).getTime();
-      for (let i = 0; i < template.length; i++) {
-        const t = template[i];
-        const offset = (t.createdAt - new Date(templateDate).getTime()) || 0;
-        const newEntry: DiaryEntry = {
-          id: `entry_${baseTime + i}_${Math.random().toString(36).slice(2, 9)}`,
-          date: dateStr,
-          text: t.text,
-          imageUris: t.imageUris,
-          tags: t.tags,
-          createdAt: baseTime + offset,
-          fontSize: t.fontSize ?? DEFAULT_FONT_SIZE,
-          highlights: t.highlights ?? [],
-          strikethroughs: t.strikethroughs ?? [],
-        };
-        all.push(newEntry);
-        added++;
-      }
-      existingDates.add(dateStr);
+      store[dateStr] = normalizeEntry({
+        ...template,
+        id: dateStr,
+        date: dateStr,
+        createdAt: baseTime,
+        updatedAt: baseTime,
+      });
+      added++;
     }
   }
-  await saveAllEntries(all);
+
+  await writeStore(store);
   return added;
 }

@@ -30,12 +30,15 @@ export const HIGHLIGHT_COLOR_OPTIONS = [
 ] as const;
 
 export type DiaryEntry = {
+  /** 날짜(YYYY-MM-DD)와 동일 — 하루 1건 */
   id: string;
   date: string;
   text: string;
   imageUris: string[];
   tags: string[];
   createdAt: number;
+  /** 마지막 수정 시각 (선택) */
+  updatedAt?: number;
   /** 본문 폰트 크기 (선택, 기본 16) */
   fontSize?: number;
   /** 형광펜 하이라이트 구간 목록 */

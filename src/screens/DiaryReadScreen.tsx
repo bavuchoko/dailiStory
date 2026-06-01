@@ -4,34 +4,33 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  PanResponder,
-  GestureResponderEvent,
-  PanResponderGestureState,
-  Animated,
-  Dimensions,
+  Pressable,
   ScrollView,
   Image,
-  ImageBackground,
   Modal,
   FlatList,
   useWindowDimensions,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-
 import type { HomeStackParamList } from '../navigation/types';
 import { CalendarWeekIcon } from '../components/icons/CalendarWeekIcon';
 import { ChevronLeftIcon } from '../components/icons/ChevronLeftIcon';
-import { PencilCheckIcon } from '../components/icons/PencilCheckIcon';
-import { BackspaceIcon } from '../components/icons/BackspaceIcon';
+import { CheckIcon } from '../components/icons/CheckIcon';
 import { CircleXIcon } from '../components/icons/CircleXIcon';
 import {
-  getEntriesByDate,
+  DiaryNoteEditor,
+  type DiaryNoteEditorHandle,
+} from '../components/DiaryNoteEditor';
+import {
+  getEntryByDate,
   getDateString,
-  deleteEntry,
+  saveEntryForDate,
+  deleteEntryByDate,
 } from '../services/diaryStorage';
 import { getIsPaid } from '../services/paidStorage';
 import {
@@ -48,6 +47,9 @@ import { getDisplayUri } from '../services/imageStorage';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'DiaryRead'>;
 
+const PHOTO_THUMB_SIZE = 80;
+const YEAR_PICKER_YEARS_BACK = 50;
+
 function formatDate(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -57,23 +59,17 @@ function formatDate(date: Date) {
   return `${year}년 ${month}월 ${day}일 (${weekday})`;
 }
 
-function formatEntryTime(createdAt: number) {
-  const d = new Date(createdAt);
-  const h = `${d.getHours()}`.padStart(2, '0');
-  const m = `${d.getMinutes()}`.padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function addDays(date: Date, amount: number) {
+function addDays(date: Date, amount: number): Date {
   const next = new Date(date);
   next.setDate(date.getDate() + amount);
   return next;
 }
 
-function addYears(date: Date, amount: number) {
-  const next = new Date(date);
-  next.setFullYear(date.getFullYear() + amount);
-  return next;
+function setYearKeepingMonthDay(date: Date, year: number): Date {
+  const month = date.getMonth();
+  const day = date.getDate();
+  const maxDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, maxDay));
 }
 
 export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
@@ -82,19 +78,22 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
     [route.params?.date],
   );
   const [currentDate, setCurrentDate] = useState<Date>(initialDate);
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const translateX = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-  const isAnimatingRef = useRef(false);
+  const [entry, setEntry] = useState<DiaryEntry | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const editorRef = useRef<DiaryNoteEditorHandle>(null);
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
-  const [entryMetaLayout, setEntryMetaLayout] = useState<
-    Record<
-      string,
-      { containerWidth?: number; lastLineWidth?: number; metaWidth?: number }
-    >
-  >({});
+  const [yearPickerVisible, setYearPickerVisible] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
+
+  const yearOptions = useMemo(() => {
+    const thisYear = new Date().getFullYear();
+    return Array.from(
+      { length: YEAR_PICKER_YEARS_BACK + 1 },
+      (_, i) => thisYear - i,
+    );
+  }, []);
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bannerUnitId =
@@ -106,161 +105,99 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
         ? ADMOB_BANNER_TEST_ANDROID
         : ADMOB_BANNER_UNIT_ID_ANDROID;
 
+  const dateStr = getDateString(currentDate);
+  const photoGap = 8;
+  const photoThumbSize = PHOTO_THUMB_SIZE;
+  const photos = entry?.imageUris ?? [];
+
+  const loadEntry = React.useCallback(() => {
+    getEntryByDate(currentDate).then(setEntry);
+  }, [dateStr]);
+
+  React.useEffect(() => {
+    if (route.params?.date) {
+      setCurrentDate(new Date(route.params.date));
+    }
+  }, [route.params?.date]);
+
+  const goPrevDay = () => {
+    setCurrentDate(prev => addDays(prev, -1));
+  };
+
+  const goNextDay = () => {
+    setCurrentDate(prev => addDays(prev, 1));
+  };
+
+  const openYearCalendar = () => {
+    navigation.navigate('YearCalendar', {
+      date: currentDate.toISOString(),
+      returnTo: 'DiaryRead',
+    });
+  };
+
+  const selectYear = (year: number) => {
+    setCurrentDate(prev => setYearKeepingMonthDay(prev, year));
+    setYearPickerVisible(false);
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       getIsPaid().then(setIsPaid);
     }, []),
   );
 
-  const getMetaOnNextLine = (entryId: string) => {
-    const layout = entryMetaLayout[entryId];
-    if (
-      !layout ||
-      layout.containerWidth == null ||
-      layout.lastLineWidth == null ||
-      layout.metaWidth == null
-    )
-      return true;
-    const { containerWidth, lastLineWidth, metaWidth } = layout;
-    const gap = 8;
-    return lastLineWidth + gap + metaWidth > containerWidth;
-  };
-
-  const dateStr = getDateString(currentDate);
-
-  const contentWidth = screenWidth - 48;
-  const photoGap = 8;
-  const photoSize = (contentWidth - photoGap * 3) / 4;
-
   useFocusEffect(
     React.useCallback(() => {
-      getEntriesByDate(currentDate).then(setEntries);
-    }, [dateStr]),
+      if (!isEditing) {
+        loadEntry();
+      }
+    }, [loadEntry, isEditing]),
   );
 
-  const allPhotos = useMemo(
-    () => entries.flatMap(e => e.imageUris),
-    [entries],
-  );
-
-  const runSlideTransition = (
-    direction: 'up' | 'down' | 'left' | 'right',
-    updateDate: () => void,
-  ) => {
-    if (isAnimatingRef.current) {
-      return;
-    }
-
-    const { width, height } = Dimensions.get('window');
-    let outX = 0;
-    let outY = 0;
-    let inX = 0;
-    let inY = 0;
-
-    switch (direction) {
-      case 'up':
-        outY = -height;
-        inY = height;
-        break;
-      case 'down':
-        outY = height;
-        inY = -height;
-        break;
-      case 'left':
-        outX = -width;
-        inX = width;
-        break;
-      case 'right':
-        outX = width;
-        inX = -width;
-        break;
-      default:
-        break;
-    }
-
-    const activeValue =
-      direction === 'left' || direction === 'right' ? translateX : translateY;
-
-    isAnimatingRef.current = true;
-
-    Animated.timing(activeValue, {
-      toValue: direction === 'left' || direction === 'right' ? outX : outY,
-      duration: 220,
-      useNativeDriver: true,
-    }).start(() => {
-      updateDate();
-
-      translateX.setValue(
-        direction === 'left' || direction === 'right' ? inX : 0,
-      );
-      translateY.setValue(
-        direction === 'up' || direction === 'down' ? inY : 0,
-      );
-
-      Animated.timing(activeValue, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }).start(() => {
-        isAnimatingRef.current = false;
-      });
-    });
+  const startEditing = () => {
+    setIsEditing(true);
   };
 
-  const handleSwipeRelease = (
-    _evt: GestureResponderEvent,
-    gestureState: PanResponderGestureState,
-  ) => {
-    const { dx, dy } = gestureState;
-    const absDx = Math.abs(dx);
-    const absDy = Math.abs(dy);
+  const cancelEditing = () => {
+    setIsEditing(false);
+    loadEntry();
+  };
 
-    if (absDx < 30 && absDy < 30) {
-      return;
-    }
-
-    if (absDy > absDx) {
-      if (dy < 0) {
-        runSlideTransition('up', () =>
-          setCurrentDate(prev => addDays(prev, 1)),
-        );
-      } else {
-        runSlideTransition('down', () =>
-          setCurrentDate(prev => addDays(prev, -1)),
-        );
-      }
+  const confirmDiscardIfNeeded = (onDiscard: () => void) => {
+    if (editorRef.current?.isDirty()) {
+      Alert.alert('변경 내용', '저장하지 않고 나가시겠습니까?', [
+        { text: '계속 편집', style: 'cancel' },
+        { text: '저장 안 함', style: 'destructive', onPress: onDiscard },
+      ]);
     } else {
-      if (dx < 0) {
-        runSlideTransition('left', () =>
-          setCurrentDate(prev => addYears(prev, 1)),
-        );
-      } else {
-        runSlideTransition('right', () =>
-          setCurrentDate(prev => addYears(prev, -1)),
-        );
-      }
+      onDiscard();
     }
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_evt, gesture) =>
-        Math.abs(gesture.dx) > 10 || Math.abs(gesture.dy) > 10,
-      onPanResponderRelease: handleSwipeRelease,
-    }),
-  ).current;
+  const handleSave = async () => {
+    const draft = editorRef.current?.getDraft();
+    if (!draft || !editorRef.current?.canSave()) return;
 
-  const handlePressToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  const handleOpenCalendar = () => {
-    navigation.navigate('YearCalendar', {
-      date: currentDate.toISOString(),
-    });
+    setSaving(true);
+    try {
+      if (!draft.text.trim() && draft.imageUris.length === 0) {
+        await deleteEntryByDate(currentDate);
+        setEntry(null);
+      } else {
+        const saved = await saveEntryForDate(dateStr, draft);
+        setEntry(saved);
+      }
+      setIsEditing(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handlePressBack = () => {
+    if (isEditing) {
+      confirmDiscardIfNeeded(cancelEditing);
+      return;
+    }
     if ((navigation as any).canGoBack?.()) {
       navigation.goBack();
       return;
@@ -268,304 +205,275 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
     navigation.navigate('Main');
   };
 
-  const handlePressWrite = () => {
-    const root = (navigation as any).getParent()?.getParent();
-    root?.navigate('DiaryWrite', { date: dateStr });
-  };
-
-  const handlePressEdit = (entryId: string) => {
-    Alert.alert('일기 수정', '이 일기를 수정하시겠습니까?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '수정',
-        onPress: () => {
-          const root = (navigation as any).getParent()?.getParent();
-          root?.navigate('DiaryWrite', { date: dateStr, entryId });
-        },
-      },
-    ]);
-  };
-
-  const handlePressDelete = (entryId: string) => {
-    Alert.alert('일기 삭제', '이 일기를 삭제하시겠습니까? 삭제된 일기는 복원할 수 없습니다.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: async () => {
-          const ok = await deleteEntry(entryId);
-          if (ok) getEntriesByDate(currentDate).then(setEntries);
-        },
-      },
-    ]);
-  };
-
   const openPhotoViewer = (index: number) => {
     setPhotoViewerIndex(index);
     setPhotoViewerVisible(true);
   };
 
+  const bodyFontSize = entry?.fontSize ?? DEFAULT_FONT_SIZE;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <View style={styles.container}>
-        <View style={styles.topBar}>
-          <View style={styles.topBarLeftGroup}>
-            <TouchableOpacity
-              onPress={handlePressBack}
-              style={styles.topBarBack}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <ChevronLeftIcon size={24} color="#6B7280" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleOpenCalendar}
-              style={styles.topBarLeft}>
-              <CalendarWeekIcon size={22} color="#6B7280" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handlePressToday} style={styles.todayButton}>
-              <Text style={styles.topBarToday}>오늘</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity onPress={handlePressWrite} style={styles.writeButton}>
-            <Text style={styles.writeButtonText}>쓰기</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.dateHeader} {...panResponder.panHandlers}>
-          {allPhotos.length > 0 ? (
-            <ImageBackground
-              source={{ uri: getDisplayUri(allPhotos[0]) }}
-              style={styles.dateHeaderBackground}
-              resizeMode="cover">
-              <View style={styles.dateHeaderOverlay} />
-              <View style={styles.dateHeaderInner}>
-                <Text style={styles.dateHeaderText}>{formatDate(currentDate)}</Text>
-              </View>
-            </ImageBackground>
-          ) : (
-            <View style={styles.dateHeaderInner}>
-              <Text style={styles.dateHeaderText}>{formatDate(currentDate)}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.bodyWrapper}>
-          <Animated.View
-            style={{
-              flex: 1,
-              transform: [
-                { translateX: translateX },
-                { translateY: translateY },
-              ],
-            }}>
-            <View style={styles.content}>
-              {allPhotos.length > 0 && (
-                <View style={[styles.photoScrollWrap, { height: photoSize }]}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.photoScroll}
-                    contentContainerStyle={styles.photoScrollContent}>
-                    {allPhotos.map((uri, index) => (
-                    <TouchableOpacity
-                      key={`${uri}-${index}`}
-                      style={[
-                        styles.photoThumbWrap,
-                        {
-                          width: photoSize,
-                          height: photoSize,
-                          marginRight: index < allPhotos.length - 1 ? photoGap : 0,
-                        },
-                      ]}
-                      onPress={() => openPhotoViewer(index)}
-                      activeOpacity={0.8}>
-                      <Image
-                        source={{ uri: getDisplayUri(uri) }}
-                        style={[styles.photoThumb, { width: photoSize, height: photoSize }]}
-                        resizeMode="cover"
-                      />
-                    </TouchableOpacity>
-                  ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              <Modal
-                visible={photoViewerVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setPhotoViewerVisible(false)}>
-                <View style={styles.photoViewerOverlay}>
-                  <TouchableOpacity
-                    style={styles.photoViewerClose}
-                    onPress={() => setPhotoViewerVisible(false)}
-                    hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
-                    <CircleXIcon size={28} color="#FFF" />
-                  </TouchableOpacity>
-                  <FlatList
-                    data={allPhotos}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    initialScrollIndex={photoViewerIndex}
-                    initialNumToRender={allPhotos.length}
-                    getItemLayout={(_: unknown, index: number) => ({
-                      length: screenWidth,
-                      offset: screenWidth * index,
-                      index,
-                    })}
-                    keyExtractor={(_, i) => `photo-${i}`}
-                    renderItem={({ item: uri }) => (
-                      <View style={[styles.photoViewerSlide, { width: screenWidth }]}>
-                        <Image
-                          source={{ uri: getDisplayUri(uri) }}
-                          style={styles.photoViewerImage}
-                          resizeMode="contain"
-                        />
-                      </View>
-                    )}
-                  />
-                </View>
-              </Modal>
-              {entries.length === 0 ? (
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.container}>
+          <View style={styles.topBar}>
+            <View style={styles.topBarLeftGroup}>
+              <TouchableOpacity
+                onPress={handlePressBack}
+                style={styles.topBarBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <ChevronLeftIcon size={24} color="#6B7280" />
+              </TouchableOpacity>
+              {!isEditing && (
                 <>
-                  <Text style={styles.diaryPlaceholder}>
-                    해당 날짜의 일기가 없습니다.
-                  </Text>
-                  <Text style={styles.helperText}>
-                    위/아래로 스와이프하면 하루씩, 좌/우로 스와이프하면 1년씩 이동합니다.
-                  </Text>
+                  <TouchableOpacity
+                    onPress={openYearCalendar}
+                    style={styles.topBarBtn}>
+                    <CalendarWeekIcon size={22} color="#6B7280" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCurrentDate(new Date())}
+                    style={styles.todayButton}>
+                    <Text style={styles.topBarToday}>오늘</Text>
+                  </TouchableOpacity>
                 </>
-              ) : (
+              )}
+            </View>
+
+            {isEditing ? (
+              <TouchableOpacity
+                onPress={handleSave}
+                style={[styles.doneButton, saving && styles.doneButtonDisabled]}
+                disabled={saving}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <CheckIcon
+                  size={22}
+                  color={saving ? '#D1D5DB' : '#111827'}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.dateNav}>
+                <TouchableOpacity
+                  onPress={goPrevDay}
+                  style={styles.dateNavDayBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+                  accessibilityLabel="전날">
+                  <Text style={styles.dateNavDayText}>전날</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setYearPickerVisible(true)}
+                  style={styles.dateNavYearBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  accessibilityLabel="연도 선택">
+                  <Text style={styles.dateNavYear}>
+                    {currentDate.getFullYear()}
+                  </Text>
+                  <Text style={styles.dateNavYearChevron}>▾</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={goNextDay}
+                  style={styles.dateNavDayBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                  accessibilityLabel="다음날">
+                  <Text style={styles.dateNavDayText}>다음날</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {isEditing ? (
+            <View style={styles.editorArea}>
+              <Text style={styles.dateTitle}>{formatDate(currentDate)}</Text>
+              <DiaryNoteEditor
+                ref={editorRef}
+                key={dateStr}
+                initialEntry={entry}
+                autoFocus
+              />
+            </View>
+          ) : (
+            <View style={styles.body}>
+              <Text style={styles.dateTitle}>{formatDate(currentDate)}</Text>
+
+              <Pressable style={styles.notePressable} onPress={startEditing}>
                 <ScrollView
-                  style={styles.entriesScroll}
-                  showsVerticalScrollIndicator={false}>
-                  {entries.map((entry, index) => (
-                    <View
-                      key={entry.id}
-                      style={[
-                        styles.entryBlock,
-                        index < entries.length - 1 && styles.entryBlockBorder,
-                      ]}>
-                      <View
-                        style={styles.entryBodyWrap}
-                        onLayout={ev => {
-                          const w = ev.nativeEvent.layout.width;
-                          setEntryMetaLayout(prev => ({
-                            ...prev,
-                            [entry.id]: {
-                              ...prev[entry.id],
-                              containerWidth: w,
-                            },
-                          }));
-                        }}>
+                  style={styles.noteScroll}
+                  contentContainerStyle={styles.noteScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled">
+                  {!entry ||
+                  (entry.text.trim().length === 0 && photos.length === 0) ? (
+                    <Text style={styles.placeholder}>
+                      탭해서 일기를 작성하세요...
+                    </Text>
+                  ) : (
+                    <>
+                      {photos.length > 0 && (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.photoScroll}
+                          contentContainerStyle={styles.photoScrollContent}
+                          nestedScrollEnabled>
+                          {photos.map((uri, index) => (
+                            <TouchableOpacity
+                              key={`${uri}-${index}`}
+                              style={[
+                                styles.photoThumbWrap,
+                                {
+                                  width: photoThumbSize,
+                                  height: photoThumbSize,
+                                  marginRight:
+                                    index < photos.length - 1 ? photoGap : 0,
+                                },
+                              ]}
+                              onPress={e => {
+                                e.stopPropagation();
+                                openPhotoViewer(index);
+                              }}
+                              activeOpacity={0.85}>
+                              <Image
+                                source={{ uri: getDisplayUri(uri) }}
+                                style={[
+                                  styles.photoThumb,
+                                  {
+                                    width: photoThumbSize,
+                                    height: photoThumbSize,
+                                  },
+                                ]}
+                                resizeMode="cover"
+                              />
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      )}
+
+                      {entry.text.trim().length > 0 && (
                         <HighlightedText
                           text={entry.text}
                           highlights={entry.highlights}
                           strikethroughs={entry.strikethroughs}
                           style={[
-                            styles.entryText,
+                            styles.noteBody,
                             {
-                              fontSize: entry.fontSize ?? DEFAULT_FONT_SIZE,
-                              lineHeight: (entry.fontSize ?? DEFAULT_FONT_SIZE) * 1.5,
+                              fontSize: bodyFontSize,
+                              lineHeight: bodyFontSize * 1.55,
                             },
                           ]}
-                          onTextLayout={ev => {
-                            const lines = ev.nativeEvent.lines;
-                            if (lines.length > 0) {
-                              const last = lines[lines.length - 1];
-                              const lastW = last.width;
-                              setEntryMetaLayout(prev => ({
-                                ...prev,
-                                [entry.id]: {
-                                  ...prev[entry.id],
-                                  lastLineWidth: lastW,
-                                },
-                              }));
-                            }
-                          }}
                         />
-                        <View
-                          style={
-                            getMetaOnNextLine(entry.id)
-                              ? styles.entryMetaRowNextLine
-                              : styles.entryMetaRow
-                          }
-                          pointerEvents="box-none">
-                          <View style={styles.entryMetaRowInner}>
-                            <View style={styles.entryMetaSpacer} />
-                            <View
-                              style={styles.entryMetaContentWrap}
-                              onLayout={ev => {
-                                const w = ev.nativeEvent.layout.width;
-                                setEntryMetaLayout(prev => ({
-                                  ...prev,
-                                  [entry.id]: {
-                                    ...prev[entry.id],
-                                    metaWidth: w,
-                                  },
-                                }));
-                              }}>
-                              {(entry.tags?.length ?? 0) > 0 && (
-                                <View style={styles.entryMetaTagsWrap}>
-                                  {(entry.tags ?? []).map((tag, i) => (
-                                    <View
-                                      key={`${entry.id}-tag-${i}`}
-                                      style={styles.entryTag}>
-                                      <Text
-                                        style={styles.entryTagText}
-                                        numberOfLines={1}
-                                        ellipsizeMode="tail">
-                                        {tag}
-                                      </Text>
-                                    </View>
-                                  ))}
-                                </View>
-                              )}
-                              <View style={styles.entryMetaActions} pointerEvents="box-none">
-                                <Text style={styles.entryTime}>
-                                  {formatEntryTime(entry.createdAt)}
-                                </Text>
-                                <TouchableOpacity
-                                  onPress={() => handlePressEdit(entry.id)}
-                                  style={styles.entryActionBtn}
-                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                                  <PencilCheckIcon size={18} color="#8e9299" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => handlePressDelete(entry.id)}
-                                  style={styles.entryActionBtn}
-                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                                  <BackspaceIcon size={18} color="#eb9d9d" />
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-          </Animated.View>
-        </View>
+                      )}
 
-        {!isPaid && (
-          <View
-            style={[
-              styles.adArea,
-              {
-                paddingLeft: insets.left,
-                paddingRight: insets.right,
-              },
-            ]}>
-            <BannerAd
-              unitId={bannerUnitId}
-              size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-            />
-          </View>
-        )}
-      </View>
+                      {(entry.tags?.length ?? 0) > 0 && (
+                        <View style={styles.tagRow}>
+                          {(entry.tags ?? []).map((tag, i) => (
+                            <View key={`tag-${i}`} style={styles.tagChip}>
+                              <Text style={styles.tagChipText}>#{tag}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </>
+                  )}
+                </ScrollView>
+              </Pressable>
+            </View>
+          )}
+
+          <Modal
+            visible={yearPickerVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setYearPickerVisible(false)}>
+            <Pressable
+              style={styles.yearPickerOverlay}
+              onPress={() => setYearPickerVisible(false)}>
+              <Pressable
+                style={styles.yearPickerCard}
+                onPress={e => e.stopPropagation()}>
+                <Text style={styles.yearPickerTitle}>연도 선택</Text>
+                <ScrollView
+                  style={styles.yearPickerList}
+                  showsVerticalScrollIndicator={false}>
+                  {yearOptions.map(year => {
+                    const selected = year === currentDate.getFullYear();
+                    return (
+                      <TouchableOpacity
+                        key={year}
+                        style={[
+                          styles.yearPickerItem,
+                          selected && styles.yearPickerItemSelected,
+                        ]}
+                        onPress={() => selectYear(year)}>
+                        <Text
+                          style={[
+                            styles.yearPickerItemText,
+                            selected && styles.yearPickerItemTextSelected,
+                          ]}>
+                          {year}년
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </Pressable>
+            </Pressable>
+          </Modal>
+
+          <Modal
+            visible={photoViewerVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPhotoViewerVisible(false)}>
+            <View style={styles.photoViewerOverlay}>
+              <TouchableOpacity
+                style={styles.photoViewerClose}
+                onPress={() => setPhotoViewerVisible(false)}
+                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
+                <CircleXIcon size={28} color="#FFF" />
+              </TouchableOpacity>
+              <FlatList
+                data={photos}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={photoViewerIndex}
+                initialNumToRender={photos.length}
+                getItemLayout={(_: unknown, index: number) => ({
+                  length: screenWidth,
+                  offset: screenWidth * index,
+                  index,
+                })}
+                keyExtractor={(_, i) => `photo-${i}`}
+                renderItem={({ item: uri }) => (
+                  <View
+                    style={[styles.photoViewerSlide, { width: screenWidth }]}>
+                    <Image
+                      source={{ uri: getDisplayUri(uri) }}
+                      style={styles.photoViewerImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+              />
+            </View>
+          </Modal>
+
+          {!isPaid && !isEditing && (
+            <View
+              style={[
+                styles.adArea,
+                { paddingLeft: insets.left, paddingRight: insets.right },
+              ]}>
+              <BannerAd
+                unitId={bannerUnitId}
+                size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+              />
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -573,33 +481,31 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
+  },
+  flex: {
+    flex: 1,
   },
   container: {
     flex: 1,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingTop: 8,
     paddingBottom: 8,
-    backgroundColor: '#F9FAFB',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
   },
   topBarLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
-  topBarBack: {
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    marginRight: 4,
-  },
-  topBarLeft: {
+  topBarBtn: {
     paddingHorizontal: 4,
     paddingVertical: 4,
   },
@@ -611,76 +517,179 @@ const styles = StyleSheet.create({
   todayButton: {
     marginLeft: 8,
   },
-  writeButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+  dateNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  writeButtonText: {
-    fontSize: 15,
+  dateNavDayBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  dateNavDayText: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#374151',
+  },
+  dateNavYearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  dateNavYear: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  dateNavYearChevron: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginLeft: 4,
+    marginTop: 1,
+  },
+  yearPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  yearPickerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 12,
+    maxHeight: 320,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  yearPickerTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 16,
+  },
+  yearPickerList: {
+    maxHeight: 260,
+  },
+  yearPickerItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  yearPickerItemSelected: {
+    backgroundColor: '#F3F4F6',
+  },
+  yearPickerItemText: {
+    fontSize: 16,
+    color: '#374151',
+  },
+  yearPickerItemTextSelected: {
+    fontWeight: '700',
     color: '#111827',
   },
-  dateHeader: {
-    backgroundColor: '#111827',
-    height: 180,
-    overflow: 'hidden',
+  doneButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFCC00',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#B8860B',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  dateHeaderInner: {
+  doneButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  editorArea: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  dateHeaderBackground: {
+  body: {
     flex: 1,
-    width: '100%',
-    height: '100%',
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  dateHeaderOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  dateTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 12,
   },
-  dateHeaderText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'right',
-    zIndex: 1,
-  },
-  content: {
+  notePressable: {
     flex: 1,
-    marginTop: 0,
-    marginHorizontal: 0,
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 5,
   },
-  photoScrollWrap: {
-    marginBottom: 8,
-    overflow: 'hidden',
+  noteScroll: {
+    flex: 1,
+  },
+  noteScrollContent: {
+    paddingBottom: 32,
+    flexGrow: 1,
+  },
+  placeholder: {
+    fontSize: 17,
+    lineHeight: 26,
+    color: '#9CA3AF',
+    paddingTop: 8,
+  },
+  noteBody: {
+    color: '#111827',
   },
   photoScroll: {
-    flex: 1,
-    height: '100%',
+    maxHeight: PHOTO_THUMB_SIZE + 4,
+    marginBottom: 16,
   },
   photoScrollContent: {
-    paddingRight: 0,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 4,
   },
   photoThumbWrap: {
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',
   },
   photoThumb: {
-    borderRadius: 8,
+    borderRadius: 10,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 20,
+  },
+  tagChip: {
     backgroundColor: '#F3F4F6',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  tagChipText: {
+    fontSize: 13,
+    color: '#6B7280',
   },
   photoViewerOverlay: {
     flex: 1,
@@ -703,116 +712,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  entriesScroll: {
-    flex: 1,
-  },
-  entryBlock: {
-    paddingBottom: 8,
-    marginBottom: 8,
-  },
-  entryBlockBorder: {
-  },
-  entryBodyWrap: {
-    position: 'relative',
-  },
-  entryText: {
-    color: '#111827',
-  },
-  entryMetaRow: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  entryMetaRowNextLine: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    minHeight: 24,
-  },
-  entryMetaRowInner: {
-    height:24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'nowrap',
-    width: '100%',
-  },
-  entryMetaSpacer: {
-    flex: 1,
-    minWidth: 0,
-  },
-  entryMetaContentWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  entryMetaTagsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-    minWidth: 0,
-    marginRight: 8,
-    alignItems: 'center',
-    overflow: 'hidden',
-    flexShrink: 1,
-  },
-  entryMetaActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  entryTime: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginRight: 4,
-  },
-  entryActionBtn: {
-    marginLeft: 4,
-    padding: 6,
-  },
-  entryTagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 8,
-  },
-  entryTag: {
-    backgroundColor: '#E5E7EB',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    marginRight: 6,
-    maxWidth: 100,
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  entryTagText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  bodyWrapper: {
-    flex: 1,
-    overflow: 'hidden',
-    backgroundColor: '#F9FAFB',
-  },
   adArea: {
     minHeight: 50,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  adLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  diaryPlaceholder: {
-    fontSize: 16,
-    color: '#4B5563',
-    marginBottom: 12,
-  },
-  helperText: {
-    fontSize: 13,
-    color: '#9CA3AF',
-  },
 });
-
