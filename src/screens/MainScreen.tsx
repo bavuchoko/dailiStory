@@ -26,7 +26,8 @@ const CALENDAR_WEEKS_BEFORE = 52;
 const CALENDAR_WEEKS_AFTER = 52;
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const VISIBLE_DAY_COUNT = 7;
-const MONTH_LABEL_LINE_HEIGHT = 14;
+const MONTH_LABEL_ROW_HEIGHT = 20;
+const CALENDAR_HEADER_TEXT_SIZE = 14;
 
 type Props = {
   onPressDiary: () => void;
@@ -41,8 +42,6 @@ type CalendarDay = {
   weekday: number;
   fullDate: Date;
   isToday: boolean;
-  showMonthLabel: boolean;
-  monthLabel: string;
 };
 
 function addDays(date: Date, amount: number): Date {
@@ -77,35 +76,12 @@ function buildDay(date: Date, today: Date): CalendarDay {
   };
 }
 
-function isDayBeforeLastDayOfMonth(date: Date): boolean {
-  const tomorrow = addDays(date, 1);
-  const dayAfterTomorrow = addDays(date, 2);
-  return (
-    tomorrow.getMonth() === date.getMonth() &&
-    dayAfterTomorrow.getMonth() !== date.getMonth()
-  );
-}
-
-function isDifferentMonth(a: Date, b: Date): boolean {
-  return a.getMonth() !== b.getMonth() || a.getFullYear() !== b.getFullYear();
-}
-
-function shouldShowMonthLabel(
-  date: Date,
-  prevCalendarDay: Date | null,
-): boolean {
-  if (!prevCalendarDay) return true;
-  if (isDifferentMonth(prevCalendarDay, date)) return true;
-  return isDayBeforeLastDayOfMonth(date);
-}
-
 function buildCalendarDays(anchor: Date): CalendarDay[] {
   const today = new Date();
   const anchorWeekStart = getStartOfWeek(anchor);
   const firstWeekStart = addDays(anchorWeekStart, -CALENDAR_WEEKS_BEFORE * 7);
   const totalWeeks = CALENDAR_WEEKS_BEFORE + CALENDAR_WEEKS_AFTER + 1;
   const result: CalendarDay[] = [];
-  let prevCalendarDay: Date | null = null;
 
   for (let weekIndex = 0; weekIndex < totalWeeks; weekIndex += 1) {
     const weekStart = addDays(firstWeekStart, weekIndex * 7);
@@ -115,21 +91,45 @@ function buildCalendarDays(anchor: Date): CalendarDay[] {
 
     for (let dayIndex = 0; dayIndex < weekDates.length; dayIndex += 1) {
       const date = weekDates[dayIndex];
-      const base = buildDay(date, today);
-      const showMonthLabel = shouldShowMonthLabel(date, prevCalendarDay);
-
-      result.push({
-        ...base,
-        showMonthLabel,
-        monthLabel: `${date.getMonth() + 1}월`,
-      });
-
-      prevCalendarDay = date;
+      result.push(buildDay(date, today));
     }
   }
 
   return result;
 }
+
+type WeekCalendarDayProps = {
+  item: CalendarDay;
+  dayItemWidth: number;
+  onPressDate?: (date: Date) => void;
+};
+
+const WeekCalendarDay = React.memo(function WeekCalendarDay({
+  item,
+  dayItemWidth,
+  onPressDate,
+}: WeekCalendarDayProps) {
+  const dayTextStyle = item.isToday
+    ? styles.weekItemTodayText
+    : item.weekday === 0
+      ? styles.weekDaySunday
+      : item.weekday === 6
+        ? styles.weekDaySaturday
+        : null;
+
+  return (
+    <View
+      style={[styles.weekColumn, { width: dayItemWidth, maxWidth: dayItemWidth }]}>
+      <TouchableOpacity
+        onPress={() => onPressDate?.(item.fullDate)}
+        style={[styles.weekItem, item.isToday && styles.weekItemTodayContainer]}
+        accessibilityLabel={`${item.label} ${item.date}일`}>
+        <Text style={[styles.weekDayLabel, dayTextStyle]}>{item.label}</Text>
+        <Text style={[styles.weekDayNumber, dayTextStyle]}>{item.date}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
 
 export const MainScreen: React.FC<Props> = ({
   onPressDiary,
@@ -146,44 +146,50 @@ export const MainScreen: React.FC<Props> = ({
   const dayItemWidth = PixelRatio.roundToNearestPixel(
     calendarWidth / VISIBLE_DAY_COUNT,
   );
-  const daySnapOffsets = useMemo(
-    () => calendarDays.map((_, index) => index * dayItemWidth),
-    [calendarDays, dayItemWidth],
-  );
   const calendarScrollRef = useRef<ScrollView>(null);
+  const calendarContentWidth = calendarDays.length * dayItemWidth;
   const didInitialScroll = useRef(false);
   const todayDayIndex = useMemo(
     () => calendarDays.findIndex(d => d.key === getDateString(today)),
     [calendarDays, today],
   );
 
+  const [displayMonthLabel, setDisplayMonthLabel] = useState(() => {
+    const index = todayDayIndex >= 0 ? Math.floor(todayDayIndex / 7) * 7 : 0;
+    const day = calendarDays[index];
+    return day ? `${day.fullDate.getMonth() + 1}월` : '';
+  });
   const [dateOrder, setDateOrder] = useState<string[]>([]);
   const [entryByDate, setEntryByDate] = useState<Record<string, DiaryEntry | null>>({});
 
-  const snapToNearestDay = useCallback(
-    (offsetX: number, animated: boolean) => {
-      const maxOffset = Math.max(0, (calendarDays.length - 1) * dayItemWidth);
+  const updateMonthLabelFromOffset = useCallback(
+    (offsetX: number) => {
+      if (calendarDays.length === 0) return;
       const index = Math.min(
         calendarDays.length - 1,
         Math.max(0, Math.round(offsetX / dayItemWidth)),
       );
-      const targetX = Math.min(maxOffset, index * dayItemWidth);
-      if (Math.abs(offsetX - targetX) > 0.5) {
-        calendarScrollRef.current?.scrollTo({ x: targetX, animated });
-      }
+      const label = `${calendarDays[index].fullDate.getMonth() + 1}월`;
+      setDisplayMonthLabel(prev => (prev === label ? prev : label));
     },
-    [calendarDays.length, dayItemWidth],
+    [calendarDays, dayItemWidth],
   );
+
+  const handlePressToday = useCallback(() => {
+    if (todayDayIndex < 0) return;
+    const offsetX = todayDayIndex * dayItemWidth;
+    calendarScrollRef.current?.scrollTo({ x: offsetX, animated: true });
+    updateMonthLabelFromOffset(offsetX);
+  }, [todayDayIndex, dayItemWidth, updateMonthLabelFromOffset]);
 
   useLayoutEffect(() => {
     if (didInitialScroll.current || todayDayIndex < 0) return;
     const weekStartIndex = Math.floor(todayDayIndex / 7) * 7;
-    calendarScrollRef.current?.scrollTo({
-      x: weekStartIndex * dayItemWidth,
-      animated: false,
-    });
+    const offsetX = weekStartIndex * dayItemWidth;
+    calendarScrollRef.current?.scrollTo({ x: offsetX, animated: false });
+    updateMonthLabelFromOffset(offsetX);
     didInitialScroll.current = true;
-  }, [dayItemWidth, todayDayIndex]);
+  }, [dayItemWidth, todayDayIndex, updateMonthLabelFromOffset]);
 
   useFocusEffect(
     useCallback(() => {
@@ -216,59 +222,55 @@ export const MainScreen: React.FC<Props> = ({
         },
       ]}>
       <Text style={styles.titleText}>Daily Story</Text>
-      <View style={styles.weekContainer}>
+      <View style={[styles.weekContainer, { width: calendarWidth }]}>
+        <View style={[styles.monthRow, { width: calendarWidth }]}>
+          <View style={[styles.monthRowCell, { width: dayItemWidth }]}>
+            <Text style={[styles.calendarHeaderText, styles.monthHeaderText]}>
+              {displayMonthLabel}
+            </Text>
+          </View>
+          {Array.from({ length: VISIBLE_DAY_COUNT - 2 }).map((_, index) => (
+            <View key={`month-spacer-${index}`} style={{ width: dayItemWidth }} />
+          ))}
+          <View style={[styles.monthRowCell, { width: dayItemWidth }]}>
+            <TouchableOpacity
+              onPress={handlePressToday}
+              style={styles.todayButton}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="오늘">
+              <Text style={[styles.calendarHeaderText, styles.todayHeaderText]}>
+                오늘
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         <ScrollView
           ref={calendarScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           decelerationRate="fast"
-          snapToOffsets={daySnapOffsets}
+          snapToInterval={dayItemWidth}
           snapToAlignment="start"
           disableIntervalMomentum
-          onScrollEndDrag={e => {
-            const velocityX = e.nativeEvent.velocity?.x ?? 0;
-            if (Math.abs(velocityX) < 0.15) {
-              snapToNearestDay(e.nativeEvent.contentOffset.x, true);
-            }
-          }}
-          onMomentumScrollEnd={e =>
-            snapToNearestDay(e.nativeEvent.contentOffset.x, true)
+          onScrollEndDrag={e =>
+            updateMonthLabelFromOffset(e.nativeEvent.contentOffset.x)
           }
-          style={styles.weekScroll}
-          contentContainerStyle={styles.weekScrollContent}>
-          {calendarDays.map(item => {
-            const dayTextStyle = item.isToday
-              ? styles.weekItemTodayText
-              : item.weekday === 0
-                ? styles.weekDaySunday
-                : item.weekday === 6
-                  ? styles.weekDaySaturday
-                  : null;
-
-            return (
-              <View key={item.key} style={[styles.weekColumn, { width: dayItemWidth }]}>
-                {item.showMonthLabel ? (
-                  <Text style={styles.weekMonthLabel}>{item.monthLabel}</Text>
-                ) : (
-                  <View style={styles.weekMonthPlaceholder} />
-                )}
-                <TouchableOpacity
-                  onPress={() => onPressDate?.(item.fullDate)}
-                  style={[
-                    styles.weekItem,
-                    item.isToday && styles.weekItemTodayContainer,
-                  ]}
-                  accessibilityLabel={`${item.label} ${item.date}일`}>
-                  <Text style={[styles.weekDayLabel, dayTextStyle]}>
-                    {item.label}
-                  </Text>
-                  <Text style={[styles.weekDayNumber, dayTextStyle]}>
-                    {item.date}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
+          onMomentumScrollEnd={e =>
+            updateMonthLabelFromOffset(e.nativeEvent.contentOffset.x)
+          }
+          style={[styles.weekScroll, { width: calendarWidth }]}
+          contentContainerStyle={[
+            styles.weekScrollContent,
+            { width: calendarContentWidth },
+          ]}>
+          {calendarDays.map(item => (
+            <WeekCalendarDay
+              key={item.key}
+              item={item}
+              dayItemWidth={dayItemWidth}
+              onPressDate={onPressDate}
+            />
+          ))}
         </ScrollView>
       </View>
 
@@ -375,8 +377,33 @@ const styles = StyleSheet.create({
   weekContainer: {
     marginBottom: 32,
   },
+  monthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    minHeight: MONTH_LABEL_ROW_HEIGHT,
+  },
+  monthRowCell: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarHeaderText: {
+    fontSize: CALENDAR_HEADER_TEXT_SIZE,
+    fontWeight: '600',
+    lineHeight: MONTH_LABEL_ROW_HEIGHT,
+  },
+  monthHeaderText: {
+    color: '#9CA3AF',
+  },
+  todayButton: {
+    paddingHorizontal: 2,
+    paddingVertical: 0,
+  },
+  todayHeaderText: {
+    color: '#DC2626',
+  },
   weekScroll: {
-    width: '100%',
+    flexGrow: 0,
   },
   weekScrollContent: {
     alignItems: 'flex-start',
@@ -391,17 +418,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 8,
     minWidth: 36,
-  },
-  weekMonthLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9CA3AF',
-    lineHeight: MONTH_LABEL_LINE_HEIGHT,
-    marginBottom: 2,
-  },
-  weekMonthPlaceholder: {
-    height: MONTH_LABEL_LINE_HEIGHT,
-    marginBottom: 2,
   },
   weekItemTodayContainer: {
     backgroundColor: '#111827',
