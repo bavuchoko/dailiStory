@@ -364,19 +364,21 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                           ]}
                         />
                       )}
-
-                      {(entry.tags?.length ?? 0) > 0 && (
-                        <View style={styles.tagRow}>
-                          {(entry.tags ?? []).map((tag, i) => (
-                            <View key={`tag-${i}`} style={styles.tagChip}>
-                              <Text style={styles.tagChipText}>#{tag}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
                     </>
                   )}
                 </ScrollView>
+
+                {(entry?.tags?.length ?? 0) > 0 && (
+                  <View style={styles.tagFooter}>
+                    <View style={styles.tagRow}>
+                      {(entry?.tags ?? []).map((tag, i) => (
+                        <View key={`tag-${i}`} style={styles.tagChip}>
+                          <Text style={styles.tagChipText}>#{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
               </Pressable>
             </View>
           )}
@@ -427,13 +429,22 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
             animationType="fade"
             onRequestClose={() => setPhotoViewerVisible(false)}>
             <View style={styles.photoViewerOverlay}>
-              <TouchableOpacity
-                style={styles.photoViewerClose}
-                onPress={() => setPhotoViewerVisible(false)}
-                hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
-                <CircleXIcon size={28} color="#FFF" />
-              </TouchableOpacity>
+              <View
+                style={[
+                  styles.photoViewerHeader,
+                  { paddingTop: insets.top + 8 },
+                ]}>
+                <TouchableOpacity
+                  style={styles.photoViewerCloseBtn}
+                  onPress={() => setPhotoViewerVisible(false)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityLabel="닫기">
+                  <CircleXIcon size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
               <FlatList
+                style={styles.photoViewerList}
                 data={photos}
                 horizontal
                 pagingEnabled
@@ -445,6 +456,14 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                   offset: screenWidth * index,
                   index,
                 })}
+                onMomentumScrollEnd={e => {
+                  const index = Math.round(
+                    e.nativeEvent.contentOffset.x / screenWidth,
+                  );
+                  if (index >= 0 && index < photos.length) {
+                    setPhotoViewerIndex(index);
+                  }
+                }}
                 keyExtractor={(_, i) => `photo-${i}`}
                 renderItem={({ item: uri }) => (
                   <View
@@ -457,6 +476,18 @@ export const DiaryReadScreen: React.FC<Props> = ({ route, navigation }) => {
                   </View>
                 )}
               />
+
+              <View
+                style={[
+                  styles.photoViewerFooter,
+                  { paddingBottom: Math.max(insets.bottom, 12) },
+                ]}>
+                {photos.length > 1 ? (
+                  <Text style={styles.photoViewerPageText}>
+                    {photoViewerIndex + 1} / {photos.length}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           </Modal>
 
@@ -640,6 +671,7 @@ const styles = StyleSheet.create({
   },
   notePressable: {
     flex: 1,
+    justifyContent: 'space-between',
   },
   noteScroll: {
     flex: 1,
@@ -674,10 +706,15 @@ const styles = StyleSheet.create({
   photoThumb: {
     borderRadius: 10,
   },
+  tagFooter: {
+    paddingTop: 12,
+    paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F3F4F6',
+  },
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 20,
   },
   tagChip: {
     backgroundColor: '#F3F4F6',
@@ -693,24 +730,45 @@ const styles = StyleSheet.create({
   },
   photoViewerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
+    backgroundColor: '#000000',
+  },
+  photoViewerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    backgroundColor: '#000000',
+  },
+  photoViewerCloseBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  photoViewerClose: {
-    position: 'absolute',
-    top: 50,
-    right: 16,
-    zIndex: 10,
-    padding: 8,
+  photoViewerList: {
+    flex: 1,
   },
   photoViewerSlide: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000000',
   },
   photoViewerImage: {
     width: '100%',
     height: '100%',
+  },
+  photoViewerFooter: {
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    backgroundColor: '#000000',
+  },
+  photoViewerPageText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
   },
   adArea: {
     minHeight: 50,
