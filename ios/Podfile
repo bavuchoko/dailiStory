@@ -37,19 +37,25 @@ target 'dailyStory' do
     # Xcode/clang 최신 버전에서 일부 Pod가 경고를 에러로 처리하며 빌드가 실패하는 케이스가 있습니다.
     # (예: -Wnon-modular-include-in-framework-module, -Wmismatched-parameter-types)
     # 앱 타겟이 아니라 Pods 타겟에만 완화 설정을 적용합니다.
+    extra_warning_flags = [
+      '-Wno-non-modular-include-in-framework-module',
+      '-Wno-mismatched-parameter-types',
+    ]
+
     installer.pods_project.targets.each do |t|
       t.build_configurations.each do |config|
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
 
-        other_cflags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
-        unless other_cflags.to_s.include?('-Wno-non-modular-include-in-framework-module')
-          other_cflags = "#{other_cflags} -Wno-non-modular-include-in-framework-module"
+        # OTHER_CFLAGS는 배열일 수 있음 — 문자열로 합치면 "[ -DRCT_REMOVE_LEGACY_ARCH=1," 같은
+        # 잘못된 플래그가 생겨 PromisesObjC 등 Pod 빌드가 실패합니다.
+        flags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+        flags = flags.is_a?(Array) ? flags.dup : [flags.to_s]
+        extra_warning_flags.each do |flag|
+          next if flags.any? { |f| f.to_s.include?(flag) }
+          flags << flag
         end
-        unless other_cflags.to_s.include?('-Wno-mismatched-parameter-types')
-          other_cflags = "#{other_cflags} -Wno-mismatched-parameter-types"
-        end
-        config.build_settings['OTHER_CFLAGS'] = other_cflags
+        config.build_settings['OTHER_CFLAGS'] = flags
       end
     end
   end
