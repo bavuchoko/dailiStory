@@ -142,8 +142,13 @@ export const DiaryNoteEditor = forwardRef<DiaryNoteEditorHandle, Props>(
     useImperativeHandle(ref, () => ({
       getDraft,
       isDirty: () => serializeDraft(getDraft()) !== snapshotRef.current,
-      canSave: () =>
-        text.trim().length > 0 || images.length > 0,
+      canSave: () => {
+        const draft = getDraft();
+        const hasContent =
+          draft.text.trim().length > 0 || draft.imageUris.length > 0;
+        const dirty = serializeDraft(draft) !== snapshotRef.current;
+        return hasContent || dirty;
+      },
     }));
 
     const addTag = () => {
